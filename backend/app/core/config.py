@@ -1,8 +1,17 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import AnyHttpUrl, Field, PostgresDsn, RedisDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Values shipped in .env.example — forbidden in production
+_DEFAULT_SECRETS: frozenset[str] = frozenset({
+    "your-super-secret-key-change-in-production-min-32-chars",
+    "your-jwt-secret-key-change-in-production",
+    "chronolegal_password",
+    "redis_password",
+    "",
+})
 
 
 class Settings(BaseSettings):
@@ -140,6 +149,27 @@ class Settings(BaseSettings):
     # Monitoring
     ENABLE_METRICS: bool = True
     METRICS_PORT: int = 9090
+
+    @model_validator(mode="after")
+    def _validate_production_secrets(self) -> "Settings":
+        if self.APP_ENV != "production":
+            return self
+        insecure: list[str] = []
+        checks = {
+            "SECRET_KEY": self.SECRET_KEY,
+            "JWT_SECRET_KEY": self.JWT_SECRET_KEY,
+            "POSTGRES_PASSWORD": self.POSTGRES_PASSWORD,
+            "REDIS_PASSWORD": self.REDIS_PASSWORD,
+        }
+        for name, value in checks.items():
+            if value in _DEFAULT_SECRETS:
+                insecure.append(name)
+        if insecure:
+            raise ValueError(
+                f"Production startup blocked — insecure default values detected for: "
+                f"{', '.join(insecure)}. Update these in your .env file."
+            )
+        return self
 
     @property
     def is_development(self) -> bool:
