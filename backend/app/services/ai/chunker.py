@@ -42,5 +42,5 @@ class TextChunker:
             }
             result.append((chunk, meta))
             if start != -1:
-                char_offset = max(0, end - settings.CHUNK_OVERLAP)
+                char_offset = end  # advance past this chunk; backing off by CHUNK_OVERLAP caused wrong offsets for repeated text
         return result
