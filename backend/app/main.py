@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -19,6 +20,23 @@ from app.middleware.rate_limit import limiter
 from app.middleware.security import SecurityMiddleware
 
 
+async def _warmup_models() -> None:
+    """Load embedding model and reranker eagerly so the first request pays no model-load penalty."""
+    loop = asyncio.get_event_loop()
+    try:
+        from app.services.ai.embedding_service import _get_embedding_model
+        await loop.run_in_executor(None, _get_embedding_model)
+        logger.info("Embedding model warmed up")
+    except Exception as exc:
+        logger.warning(f"Embedding model warmup failed (non-fatal): {exc}")
+    try:
+        from app.services.ai.reranker import _get_cross_encoder
+        await loop.run_in_executor(None, _get_cross_encoder)
+        logger.info("Reranker warmed up")
+    except Exception as exc:
+        logger.warning(f"Reranker warmup failed (non-fatal): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -33,6 +51,8 @@ async def lifespan(app: FastAPI):
         logger.info("Redis connection verified")
     except Exception as e:
         logger.warning(f"Redis not available: {e}")
+
+    await _warmup_models()
 
     yield
 
