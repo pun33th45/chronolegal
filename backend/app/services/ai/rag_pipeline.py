@@ -156,6 +156,7 @@ class RAGPipeline:
         top_k: int | None = None,
         filters: dict[str, Any] | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
+        _INSUFFICIENT = "The uploaded legal corpus does not contain sufficient evidence to answer this question."
         top_k = top_k or settings.TOP_K_RERANKED
 
         rewritten = await rewrite_query(query)
@@ -171,22 +172,27 @@ class RAGPipeline:
         distances = raw_results.get("distances", [[]])[0]
 
         if not documents:
-            yield StreamChunk(
-                type="text",
-                content="The uploaded legal corpus does not contain sufficient evidence to answer this question.",
-            )
+            yield StreamChunk(type="text", content=_INSUFFICIENT)
             return
 
         reranked = await self.reranker.rerank(rewritten, documents, top_k=top_k)
+
+        # Gate: check reranker score before generating or yielding citations
+        max_score = max(score for _, score in reranked) if reranked else 0
+        if max_score < settings.SIMILARITY_THRESHOLD:
+            yield StreamChunk(type="text", content=_INSUFFICIENT)
+            return
 
         context_parts = []
         citations_data = []
         for rank, (orig_idx, score) in enumerate(reranked):
             doc = documents[orig_idx]
             meta = metadatas[orig_idx] if orig_idx < len(metadatas) else {}
+            similarity = 1 - (distances[orig_idx] if orig_idx < len(distances) else 0)
             context_parts.append(
                 f"[Document {rank + 1}]\n"
                 f"Case: {meta.get('case_name', 'Unknown')}\n"
+                f"Court: {meta.get('court', 'N/A')} | Date: {meta.get('date', 'N/A')}\n"
                 f"Content: {doc}\n"
             )
             citations_data.append(Citation(
@@ -200,7 +206,7 @@ class RAGPipeline:
                 date=meta.get("date"),
             ))
 
-        # Yield citations first
+        # Yield citations only after the threshold gate passes
         yield StreamChunk(type="citation", citations=citations_data)
 
         context = "\n\n---\n\n".join(context_parts)
