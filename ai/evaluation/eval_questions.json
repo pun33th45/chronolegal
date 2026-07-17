@@ -2,81 +2,351 @@
   {
     "question": "What are the fundamental rights guaranteed under the Indian Constitution?",
     "ground_truth": "The Indian Constitution guarantees fundamental rights under Part III including right to equality, right to freedom, right against exploitation, right to freedom of religion, cultural and educational rights, and right to constitutional remedies.",
-    "expected_cases": ["Kesavananda Bharati v. State of Kerala", "Maneka Gandhi v. Union of India"]
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala", "Maneka Gandhi v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is the doctrine of basic structure of the Constitution?",
     "ground_truth": "The basic structure doctrine holds that the Parliament cannot amend the Constitution in a way that destroys its basic structure or essential features. It was established in Kesavananda Bharati v. State of Kerala (1973).",
-    "expected_cases": ["Kesavananda Bharati v. State of Kerala"]
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What does Article 21 of the Indian Constitution guarantee?",
     "ground_truth": "Article 21 guarantees that no person shall be deprived of his life or personal liberty except according to procedure established by law.",
-    "expected_cases": ["Maneka Gandhi v. Union of India", "Francis Coralie Mullin v. Administrator"]
+    "expected_cases": ["Maneka Gandhi v. Union of India", "Francis Coralie Mullin v. Administrator"],
+    "category": "statute_interpretation",
+    "answerable": true
   },
   {
     "question": "What is the principle of natural justice in Indian administrative law?",
     "ground_truth": "The principles of natural justice include audi alteram partem (right to be heard) and nemo judex in causa sua (no one should be a judge in their own cause).",
-    "expected_cases": ["Maneka Gandhi v. Union of India"]
+    "expected_cases": ["Maneka Gandhi v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is the scope of judicial review in India?",
     "ground_truth": "Judicial review in India allows courts to examine the constitutionality of legislative enactments and executive orders. It is a basic feature of the Constitution.",
-    "expected_cases": ["Kesavananda Bharati v. State of Kerala", "Minerva Mills Ltd. v. Union of India"]
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala", "Minerva Mills Ltd. v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What happened in the Maneka Gandhi case?",
     "ground_truth": "In Maneka Gandhi v. Union of India (1978), the Supreme Court held that the procedure under Article 21 must be fair, just and reasonable, expanding the scope of personal liberty.",
-    "expected_cases": ["Maneka Gandhi v. Union of India"]
+    "expected_cases": ["Maneka Gandhi v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is the right to education under the Indian Constitution?",
     "ground_truth": "Article 21A, inserted by the 86th Constitutional Amendment Act 2002, provides free and compulsory education to children between 6 and 14 years of age as a fundamental right.",
-    "expected_cases": ["Unni Krishnan J.P. v. State of Andhra Pradesh"]
+    "expected_cases": ["Unni Krishnan J.P. v. State of Andhra Pradesh"],
+    "category": "statute_interpretation",
+    "answerable": true
   },
   {
     "question": "What is the concept of constitutional morality in India?",
     "ground_truth": "Constitutional morality refers to the paramount importance of constitutional principles and values over social morality. The Supreme Court has used this concept in landmark judgments on individual rights.",
-    "expected_cases": []
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is the right to privacy ruling by the Supreme Court?",
     "ground_truth": "In Justice K.S. Puttaswamy v. Union of India (2017), a nine-judge bench unanimously held that the right to privacy is a fundamental right protected under Articles 14, 19 and 21 of the Constitution.",
-    "expected_cases": ["Justice K.S. Puttaswamy v. Union of India"]
+    "expected_cases": ["Justice K.S. Puttaswamy v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is habeas corpus and when can it be used?",
     "ground_truth": "Habeas corpus is a writ that commands a person who has detained another to produce the detainee before the court. It is used to challenge unlawful detention and can be filed under Article 32 before the Supreme Court or Article 226 before a High Court.",
-    "expected_cases": []
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What are Directive Principles of State Policy?",
     "ground_truth": "Directive Principles of State Policy under Part IV of the Constitution are non-justiciable guidelines for the state in formulating policies. They are fundamental in governance and must be considered by the state in law-making.",
-    "expected_cases": ["Minerva Mills Ltd. v. Union of India"]
+    "expected_cases": ["Minerva Mills Ltd. v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is the doctrine of proportionality in Indian constitutional law?",
     "ground_truth": "The doctrine of proportionality requires that state action must be proportionate to the objective sought to be achieved. Restrictions on fundamental rights must not be excessive and must bear a rational nexus to the goal.",
-    "expected_cases": []
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "Explain the relationship between fundamental rights and directive principles",
     "ground_truth": "Initially courts held that fundamental rights prevail over directive principles. After the 42nd Amendment and Minerva Mills case, they must be harmoniously construed. Neither is absolute and both must be balanced.",
-    "expected_cases": ["Minerva Mills Ltd. v. Union of India", "Kesavananda Bharati v. State of Kerala"]
+    "expected_cases": ["Minerva Mills Ltd. v. Union of India", "Kesavananda Bharati v. State of Kerala"],
+    "category": "multi_case_comparison",
+    "answerable": true
   },
   {
     "question": "What is the right to freedom of speech and expression under Article 19?",
     "ground_truth": "Article 19(1)(a) guarantees freedom of speech and expression. This right is not absolute and is subject to reasonable restrictions under Article 19(2) on grounds such as security of state, public order, decency and morality.",
-    "expected_cases": []
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
   },
   {
     "question": "What did the court decide in Indira Nehru Gandhi v. Raj Narain?",
     "ground_truth": "In Indira Nehru Gandhi v. Raj Narain (1975), the Supreme Court struck down the 39th Constitutional Amendment which sought to immunise the election of the Prime Minister from judicial review, holding that free and fair elections are part of the basic structure.",
-    "expected_cases": ["Indira Nehru Gandhi v. Raj Narain"]
+    "expected_cases": ["Indira Nehru Gandhi v. Raj Narain"],
+    "category": "fact_lookup",
+    "answerable": true
   },
   {
     "question": "What is preventive detention and what safeguards exist?",
     "ground_truth": "Preventive detention is detention without trial to prevent a person from committing an offence. Article 22 provides safeguards including the right to be informed of grounds of detention and the right to make representations to an Advisory Board.",
-    "expected_cases": []
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "How did the Supreme Court rule on Section 377 of the IPC?",
+    "ground_truth": "In Navtej Singh Johar v. Union of India (2018), the Supreme Court partially struck down Section 377 IPC, decriminalising consensual same-sex relations between adults.",
+    "expected_cases": ["Navtej Singh Johar v. Union of India"],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What is the principle of res judicata in Indian civil procedure?",
+    "ground_truth": "Res judicata under Section 11 CPC bars relitigation of issues that have been finally decided between the same parties by a competent court. It promotes finality of judgments and prevents abuse of process.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "Compare the Golak Nath and Kesavananda Bharati decisions on constitutional amendments",
+    "ground_truth": "Golak Nath (1967) held Parliament had no power to amend fundamental rights. Kesavananda Bharati (1973) overruled Golak Nath, holding Parliament can amend any provision but cannot alter the basic structure of the Constitution.",
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala"],
+    "category": "multi_case_comparison",
+    "answerable": true
+  },
+  {
+    "question": "What is the rule against perpetuities under Indian property law?",
+    "ground_truth": "The rule against perpetuities under Section 14 of the Transfer of Property Act 1882 restricts creation of future interests that vest beyond a life in being plus 18 years.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "How does Section 302 IPC define murder and what is the punishment?",
+    "ground_truth": "Section 302 IPC provides for punishment for murder with death or imprisonment for life and fine. Murder is defined under Section 300 as culpable homicide amounting to murder when done with intent to cause death.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the test for determining whether a state law encroaches on a Central subject?",
+    "ground_truth": "The pith and substance doctrine is applied: courts look at the true nature and character of the legislation. Incidental encroachment on another List does not invalidate the law if its dominant purpose falls within the legislature's competence.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What are the essential elements of a valid contract under the Indian Contract Act?",
+    "ground_truth": "Under the Indian Contract Act 1872, a valid contract requires: offer and acceptance, lawful consideration, capacity of parties, free consent, lawful object, and the agreement must not be declared void.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the doctrine of promissory estoppel as applied by Indian courts?",
+    "ground_truth": "Promissory estoppel prevents a promisor from going back on a promise made to another who has acted on it to their detriment. The Supreme Court in Motilal Padampat Sugar Mills recognized it as enforceable against the government.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What distinguishes culpable homicide from murder under IPC?",
+    "ground_truth": "Culpable homicide becomes murder when committed with intention to cause death, or bodily injury likely to cause death, or an act so imminently dangerous that it must in all probability cause death. The four exceptions in Section 300 convert murder back to culpable homicide.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "How has the Supreme Court interpreted the right to a fair trial under Article 21?",
+    "ground_truth": "The Supreme Court has read a right to speedy trial, right to legal aid, right to know the charges, and right against self-incrimination into Article 21 as aspects of the right to life and personal liberty.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What is the significance of the Vishaka v. State of Rajasthan judgment?",
+    "ground_truth": "Vishaka v. State of Rajasthan (1997) laid down guidelines for prevention of sexual harassment at the workplace as binding law in the absence of legislation, filling a vacuum until the POSH Act 2013 was enacted.",
+    "expected_cases": ["Vishaka v. State of Rajasthan"],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "Compare judicial activism in Maneka Gandhi and Vishaka judgments",
+    "ground_truth": "Both cases exemplify judicial activism: Maneka Gandhi expanded Article 21 beyond textual limits to require fair procedure; Vishaka created binding workplace harassment guidelines in the absence of legislation, importing international conventions as domestic law.",
+    "expected_cases": ["Maneka Gandhi v. Union of India", "Vishaka v. State of Rajasthan"],
+    "category": "multi_case_comparison",
+    "answerable": true
+  },
+  {
+    "question": "What are the requirements for a valid will under the Indian Succession Act?",
+    "ground_truth": "A will under the Indian Succession Act 1925 must be made by a person of sound mind aged 18+, must be in writing, signed by the testator or at their direction, and attested by two witnesses who are present simultaneously.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What did the court hold in the Olga Tellis v. Bombay Municipal Corporation case?",
+    "ground_truth": "In Olga Tellis v. Bombay Municipal Corporation (1985), the Supreme Court held that the right to livelihood is part of the right to life under Article 21, and pavement dwellers cannot be evicted without following due process.",
+    "expected_cases": ["Olga Tellis v. Bombay Municipal Corporation"],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What is the Wednesbury unreasonableness test and does Indian law adopt it?",
+    "ground_truth": "Wednesbury unreasonableness holds that a decision is unlawful if so unreasonable that no reasonable authority could have made it. Indian courts apply this test in administrative law review while also adopting the proportionality standard for fundamental rights cases.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "How has Article 32 been described by the Supreme Court?",
+    "ground_truth": "Dr. B.R. Ambedkar described Article 32 as the heart and soul of the Constitution. The Supreme Court held that the right to move the Supreme Court for enforcement of fundamental rights is itself a fundamental right that cannot be suspended.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What did the Supreme Court decide in the ADM Jabalpur case and was it overruled?",
+    "ground_truth": "In ADM Jabalpur v. Shivkant Shukla (1976), the Supreme Court held that during Emergency the right to move courts for habeas corpus could be suspended. This was overruled in Justice K.S. Puttaswamy v. Union of India (2017).",
+    "expected_cases": ["Justice K.S. Puttaswamy v. Union of India"],
+    "category": "multi_case_comparison",
+    "answerable": true
+  },
+  {
+    "question": "What is the law on anticipatory bail in India?",
+    "ground_truth": "Under Section 438 CrPC, a court may grant anticipatory bail directing release of a person on bail in the event of arrest. The Supreme Court has held that the power is discretionary and must be exercised with care.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What was the Supreme Court's ruling in the Sabarimala case?",
+    "ground_truth": "In Indian Young Lawyers Association v. State of Kerala (Sabarimala, 2018), the Supreme Court held by 4-1 majority that the restriction on entry of women of menstruating age into the Sabarimala temple violated Articles 14, 15, 17 and 25.",
+    "expected_cases": ["Indian Young Lawyers Association v. State of Kerala"],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What is the doctrine of eclipse in Indian constitutional law?",
+    "ground_truth": "Under the doctrine of eclipse, a pre-constitutional law inconsistent with fundamental rights does not become void but is merely eclipsed. If the inconsistency is removed by constitutional amendment, the law revives.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "How does Indian law treat arbitration agreements and their severability from the main contract?",
+    "ground_truth": "Section 16 of the Arbitration and Conciliation Act 1996 codifies the competence-competence principle and severability: an arbitration clause is treated as an independent agreement and survives the invalidity of the main contract.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the punishment for rape under the POCSO Act?",
+    "ground_truth": "Under the Protection of Children from Sexual Offences Act 2012, penetrative sexual assault on a child below 16 years carries a minimum of 20 years rigorous imprisonment, extendable to life imprisonment or death in aggravated cases.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the scope of legislative competence under the Concurrent List?",
+    "ground_truth": "Both Parliament and state legislatures can legislate on Concurrent List subjects. In case of conflict, the Central law prevails under Article 254, unless the state law receives Presidential assent or Parliament later legislates.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What happened in the 2G spectrum scam case and how did the Supreme Court rule?",
+    "ground_truth": "In Centre for Public Interest Litigation v. Union of India (2012), the Supreme Court cancelled 122 telecom licences granted under the first-come-first-served policy, holding the allocation unconstitutional and directing spectrum auctioning.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What is the constitutional validity of the death penalty in India?",
+    "ground_truth": "In Bachan Singh v. State of Punjab (1980), the Supreme Court upheld the constitutional validity of the death penalty, restricting it to the rarest of rare cases. The court laid down guidelines for courts to determine this threshold.",
+    "expected_cases": ["Bachan Singh v. State of Punjab"],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What is the Bachan Singh rarest of rare doctrine and which cases apply it?",
+    "ground_truth": "Bachan Singh (1980) established that the death sentence should be imposed only in the 'rarest of rare' cases where the alternative of life imprisonment is 'unquestionably foreclosed'. Courts weigh aggravating and mitigating circumstances.",
+    "expected_cases": ["Bachan Singh v. State of Punjab"],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What did the Supreme Court hold in Consumer Education and Research Centre v. Union of India on Article 21?",
+    "ground_truth": "The court held that the right to health and medical care is a fundamental right under Article 21, imposing positive obligations on the state to provide health services to workers and citizens.",
+    "expected_cases": [],
+    "category": "fact_lookup",
+    "answerable": true
+  },
+  {
+    "question": "What are the grounds for challenging administrative action under Article 226?",
+    "ground_truth": "Under Article 226, High Courts can issue writs of habeas corpus, mandamus, certiorari, prohibition, and quo warranto to challenge administrative action on grounds of lack of jurisdiction, breach of natural justice, error of law, and Wednesbury unreasonableness.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the current market price of Bitcoin?",
+    "ground_truth": "",
+    "expected_cases": [],
+    "category": "unanswerable",
+    "answerable": false
+  },
+  {
+    "question": "Who won the FIFA World Cup 2022?",
+    "ground_truth": "",
+    "expected_cases": [],
+    "category": "unanswerable",
+    "answerable": false
+  },
+  {
+    "question": "What are the ingredients of a traditional biryani recipe?",
+    "ground_truth": "",
+    "expected_cases": [],
+    "category": "unanswerable",
+    "answerable": false
+  },
+  {
+    "question": "Under Indian law, can a court order a company to pay damages for breach of a verbal employment contract?",
+    "ground_truth": "Verbal contracts are valid under the Indian Contract Act 1872 unless a specific form is required by law. Courts can award damages for breach of a verbal employment contract if the claimant proves the contract's terms and the breach.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the constitutional position on reservation in promotion for Scheduled Castes and Scheduled Tribes?",
+    "ground_truth": "Article 16(4A) permits the state to make provisions for reservation in matters of promotion for SCs and STs if they are not adequately represented. However, the court must ensure this does not compromise efficiency of administration.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
+  },
+  {
+    "question": "What is the latest amendment to the Indian Evidence Act regarding electronic records?",
+    "ground_truth": "The Information Technology Act 2000 amended the Indian Evidence Act 1872 to include electronic records as admissible evidence under Section 65B, subject to certification requirements.",
+    "expected_cases": [],
+    "category": "statute_interpretation",
+    "answerable": true
   }
 ]
