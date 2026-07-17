@@ -1,6 +1,6 @@
 """
 Full RAG pipeline:
-Query → Rewrite → Embed → Retrieve → Rerank → Build Context → LLM → Answer + Citations
+Query → Rewrite → Embed → [BM25] → RRF Fuse → Rerank → Build Context → LLM → Answer + Citations
 """
 import time
 from dataclasses import dataclass, field
@@ -50,6 +50,51 @@ class RAGPipeline:
             self._reranker = Reranker()
         return self._reranker
 
+    # ------------------------------------------------------------------
+    # Hybrid retrieval helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _reciprocal_rank_fusion(
+        ranked_lists: list[list[int]],
+        k: int = 60,
+    ) -> list[int]:
+        """
+        Fuse multiple ranked lists (of original document indices) using RRF.
+        Returns indices sorted by descending fused score.
+        """
+        scores: dict[int, float] = {}
+        for ranked in ranked_lists:
+            for rank, idx in enumerate(ranked):
+                scores[idx] = scores.get(idx, 0.0) + 1.0 / (k + rank + 1)
+        return sorted(scores, key=lambda i: scores[i], reverse=True)
+
+    def _bm25_rank(self, query: str, documents: list[str]) -> list[int]:
+        """Return document indices sorted by BM25 score descending."""
+        from rank_bm25 import BM25Okapi
+        tokenized = [doc.lower().split() for doc in documents]
+        bm25 = BM25Okapi(tokenized)
+        scores = bm25.get_scores(query.lower().split())
+        return sorted(range(len(documents)), key=lambda i: scores[i], reverse=True)
+
+    def _fuse_results(
+        self,
+        query: str,
+        documents: list[str],
+        dense_order: list[int],
+    ) -> list[int]:
+        """
+        If HYBRID_SEARCH is enabled, fuse dense + BM25 ranks via RRF.
+        Otherwise return dense order unchanged.
+        """
+        if not settings.HYBRID_SEARCH or not documents:
+            return dense_order
+        bm25_order = self._bm25_rank(query, documents)
+        return self._reciprocal_rank_fusion(
+            [dense_order, bm25_order],
+            k=settings.HYBRID_RRF_K,
+        )
+
     async def run(
         self,
         query: str,
@@ -86,16 +131,22 @@ class RAGPipeline:
                 latency_ms=int((time.perf_counter() - start) * 1000),
             )
 
-        # Step 3: Rerank
-        reranked = await self.reranker.rerank(rewritten, documents, top_k=top_k)
+        # Step 3: Hybrid fusion (BM25 + dense via RRF) then rerank
+        dense_order = list(range(len(documents)))  # ChromaDB already sorted by distance
+        fused_order = self._fuse_results(rewritten, documents, dense_order)
+        fused_docs = [documents[i] for i in fused_order]
+        fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
+        fused_dist = [distances[i] if i < len(distances) else 0.0 for i in fused_order]
 
-        # Step 4: Build context and citations
+        reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
+
+        # Step 4: Build context and citations (index into fused arrays)
         context_parts = []
         pre_citations = []
         for rank, (orig_idx, score) in enumerate(reranked):
-            doc = documents[orig_idx]
-            meta = metadatas[orig_idx] if orig_idx < len(metadatas) else {}
-            similarity = 1 - (distances[orig_idx] if orig_idx < len(distances) else 0)
+            doc = fused_docs[orig_idx]
+            meta = fused_meta[orig_idx] if orig_idx < len(fused_meta) else {}
+            similarity = 1 - (fused_dist[orig_idx] if orig_idx < len(fused_dist) else 0)
 
             context_parts.append(
                 f"[Document {rank + 1}]\n"
@@ -175,7 +226,14 @@ class RAGPipeline:
             yield StreamChunk(type="text", content=_INSUFFICIENT)
             return
 
-        reranked = await self.reranker.rerank(rewritten, documents, top_k=top_k)
+        # Hybrid fusion then rerank
+        dense_order = list(range(len(documents)))
+        fused_order = self._fuse_results(rewritten, documents, dense_order)
+        fused_docs = [documents[i] for i in fused_order]
+        fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
+        fused_dist = [distances[i] if i < len(distances) else 0.0 for i in fused_order]
+
+        reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
 
         # Gate: check reranker score before generating or yielding citations
         max_score = max(score for _, score in reranked) if reranked else 0
@@ -186,9 +244,8 @@ class RAGPipeline:
         context_parts = []
         citations_data = []
         for rank, (orig_idx, score) in enumerate(reranked):
-            doc = documents[orig_idx]
-            meta = metadatas[orig_idx] if orig_idx < len(metadatas) else {}
-            similarity = 1 - (distances[orig_idx] if orig_idx < len(distances) else 0)
+            doc = fused_docs[orig_idx]
+            meta = fused_meta[orig_idx] if orig_idx < len(fused_meta) else {}
             context_parts.append(
                 f"[Document {rank + 1}]\n"
                 f"Case: {meta.get('case_name', 'Unknown')}\n"

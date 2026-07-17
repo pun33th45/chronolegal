@@ -106,10 +106,14 @@ class Settings(BaseSettings):
     # RAG
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 128
-    TOP_K_RETRIEVAL: int = 20
+    TOP_K_RETRIEVAL: int = 12
     TOP_K_RERANKED: int = 5
     SIMILARITY_THRESHOLD: float = 0.6
     RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    # Hybrid search (BM25 + dense fused with Reciprocal Rank Fusion)
+    HYBRID_SEARCH: bool = True
+    HYBRID_RRF_K: int = 60  # RRF constant; higher = smoother rank fusion
 
     # Dataset
     CHRONOLEGAL_DATA_PATH: str = "/data/chronolegal"
