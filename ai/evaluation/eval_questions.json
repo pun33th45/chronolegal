@@ -1,0 +1,82 @@
+[
+  {
+    "question": "What are the fundamental rights guaranteed under the Indian Constitution?",
+    "ground_truth": "The Indian Constitution guarantees fundamental rights under Part III including right to equality, right to freedom, right against exploitation, right to freedom of religion, cultural and educational rights, and right to constitutional remedies.",
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala", "Maneka Gandhi v. Union of India"]
+  },
+  {
+    "question": "What is the doctrine of basic structure of the Constitution?",
+    "ground_truth": "The basic structure doctrine holds that the Parliament cannot amend the Constitution in a way that destroys its basic structure or essential features. It was established in Kesavananda Bharati v. State of Kerala (1973).",
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala"]
+  },
+  {
+    "question": "What does Article 21 of the Indian Constitution guarantee?",
+    "ground_truth": "Article 21 guarantees that no person shall be deprived of his life or personal liberty except according to procedure established by law.",
+    "expected_cases": ["Maneka Gandhi v. Union of India", "Francis Coralie Mullin v. Administrator"]
+  },
+  {
+    "question": "What is the principle of natural justice in Indian administrative law?",
+    "ground_truth": "The principles of natural justice include audi alteram partem (right to be heard) and nemo judex in causa sua (no one should be a judge in their own cause).",
+    "expected_cases": ["Maneka Gandhi v. Union of India"]
+  },
+  {
+    "question": "What is the scope of judicial review in India?",
+    "ground_truth": "Judicial review in India allows courts to examine the constitutionality of legislative enactments and executive orders. It is a basic feature of the Constitution.",
+    "expected_cases": ["Kesavananda Bharati v. State of Kerala", "Minerva Mills Ltd. v. Union of India"]
+  },
+  {
+    "question": "What happened in the Maneka Gandhi case?",
+    "ground_truth": "In Maneka Gandhi v. Union of India (1978), the Supreme Court held that the procedure under Article 21 must be fair, just and reasonable, expanding the scope of personal liberty.",
+    "expected_cases": ["Maneka Gandhi v. Union of India"]
+  },
+  {
+    "question": "What is the right to education under the Indian Constitution?",
+    "ground_truth": "Article 21A, inserted by the 86th Constitutional Amendment Act 2002, provides free and compulsory education to children between 6 and 14 years of age as a fundamental right.",
+    "expected_cases": ["Unni Krishnan J.P. v. State of Andhra Pradesh"]
+  },
+  {
+    "question": "What is the concept of constitutional morality in India?",
+    "ground_truth": "Constitutional morality refers to the paramount importance of constitutional principles and values over social morality. The Supreme Court has used this concept in landmark judgments on individual rights.",
+    "expected_cases": []
+  },
+  {
+    "question": "What is the right to privacy ruling by the Supreme Court?",
+    "ground_truth": "In Justice K.S. Puttaswamy v. Union of India (2017), a nine-judge bench unanimously held that the right to privacy is a fundamental right protected under Articles 14, 19 and 21 of the Constitution.",
+    "expected_cases": ["Justice K.S. Puttaswamy v. Union of India"]
+  },
+  {
+    "question": "What is habeas corpus and when can it be used?",
+    "ground_truth": "Habeas corpus is a writ that commands a person who has detained another to produce the detainee before the court. It is used to challenge unlawful detention and can be filed under Article 32 before the Supreme Court or Article 226 before a High Court.",
+    "expected_cases": []
+  },
+  {
+    "question": "What are Directive Principles of State Policy?",
+    "ground_truth": "Directive Principles of State Policy under Part IV of the Constitution are non-justiciable guidelines for the state in formulating policies. They are fundamental in governance and must be considered by the state in law-making.",
+    "expected_cases": ["Minerva Mills Ltd. v. Union of India"]
+  },
+  {
+    "question": "What is the doctrine of proportionality in Indian constitutional law?",
+    "ground_truth": "The doctrine of proportionality requires that state action must be proportionate to the objective sought to be achieved. Restrictions on fundamental rights must not be excessive and must bear a rational nexus to the goal.",
+    "expected_cases": []
+  },
+  {
+    "question": "Explain the relationship between fundamental rights and directive principles",
+    "ground_truth": "Initially courts held that fundamental rights prevail over directive principles. After the 42nd Amendment and Minerva Mills case, they must be harmoniously construed. Neither is absolute and both must be balanced.",
+    "expected_cases": ["Minerva Mills Ltd. v. Union of India", "Kesavananda Bharati v. State of Kerala"]
+  },
+  {
+    "question": "What is the right to freedom of speech and expression under Article 19?",
+    "ground_truth": "Article 19(1)(a) guarantees freedom of speech and expression. This right is not absolute and is subject to reasonable restrictions under Article 19(2) on grounds such as security of state, public order, decency and morality.",
+    "expected_cases": []
+  },
+  {
+    "question": "What did the court decide in Indira Nehru Gandhi v. Raj Narain?",
+    "ground_truth": "In Indira Nehru Gandhi v. Raj Narain (1975), the Supreme Court struck down the 39th Constitutional Amendment which sought to immunise the election of the Prime Minister from judicial review, holding that free and fair elections are part of the basic structure.",
+    "expected_cases": ["Indira Nehru Gandhi v. Raj Narain"]
+  },
+  {
+    "question": "What is preventive detention and what safeguards exist?",
+    "ground_truth": "Preventive detention is detention without trial to prevent a person from committing an offence. Article 22 provides safeguards including the right to be informed of grounds of detention and the right to make representations to an Advisory Board.",
+    "expected_cases": []
+  }
+]

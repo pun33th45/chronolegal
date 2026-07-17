@@ -1,0 +1,19 @@
+# Development overrides - hot reload, debug mode, no GPU requirement
+
+services:
+  backend:
+    build:
+      target: development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+
+  frontend:
+    build:
+      target: development
+    command: npm run dev -- --host 0.0.0.0
+
+  ollama:
+    deploy:
+      resources: {}

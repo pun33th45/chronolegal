@@ -1,0 +1,17 @@
+Extract named entities from the following Indian legal judgment text.
+
+Return a JSON object with these keys (use empty arrays if none found):
+{
+  "judges": [],       // full names with designation (e.g. "Y.V. Chandrachud CJ")
+  "advocates": [],    // lawyers and senior counsel
+  "courts": [],       // all courts mentioned
+  "acts": [],         // full act names (e.g. "Constitution of India")
+  "sections": [],     // sections/articles (e.g. "Article 21", "Section 302 IPC")
+  "organizations": [], // parties, government bodies, companies
+  "dates": []         // dates in ISO 8601 format where possible
+}
+
+JUDGMENT TEXT:
+{text}
+
+JSON OUTPUT:
