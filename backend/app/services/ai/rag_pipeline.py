@@ -2,15 +2,18 @@
 Full RAG pipeline:
 Query → Rewrite → Embed → [BM25] → RRF Fuse → Rerank → Build Context → LLM → Answer + Citations
 """
+import hashlib
+import json
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, AsyncGenerator
 
 from loguru import logger
 
 from app.core.config import settings
 from app.core.exceptions import InsufficientContextError
+from app.core.redis import cache
 from app.schemas.chat import Citation, RelatedCase, StreamChunk
 from app.services.ai.embedding_service import EmbeddingService
 from app.services.ai.llm_provider import generate_text, stream_text
@@ -20,6 +23,8 @@ from app.services.ai.prompt_templates import (
 )
 from app.services.ai.query_rewriter import rewrite_query
 from app.services.ai.reranker import Reranker
+
+_RAG_CACHE_TTL = 3_600  # 1 hour — identical (query, filters) reuses the answer
 
 
 @dataclass
@@ -96,6 +101,11 @@ class RAGPipeline:
             k=settings.HYBRID_RRF_K,
         )
 
+    @staticmethod
+    def _cache_key(query: str, top_k: int, filters: dict | None) -> str:
+        payload = json.dumps({"q": query, "k": top_k, "f": filters or {}}, sort_keys=True)
+        return f"rag:{hashlib.md5(payload.encode()).hexdigest()}"
+
     async def run(
         self,
         query: str,
@@ -105,6 +115,20 @@ class RAGPipeline:
     ) -> RAGResult:
         start = time.perf_counter()
         top_k = top_k or settings.TOP_K_RERANKED
+
+        # Check answer cache (conversation_history excluded — answers are query-specific)
+        cache_key = self._cache_key(query, top_k, filters)
+        cached = await cache.get(cache_key)
+        if cached:
+            logger.debug(f"RAG cache hit: {cache_key}")
+            return RAGResult(
+                answer=cached["answer"],
+                citations=[Citation(**c) for c in cached["citations"]],
+                rewritten_query=cached.get("rewritten_query"),
+                context_used=cached.get("context_used", True),
+                sufficient_context=cached.get("sufficient_context", True),
+                latency_ms=cached.get("latency_ms", 0),
+            )
 
         # Step 1: Rewrite query
         rewritten = await rewrite_query(query)
@@ -193,7 +217,7 @@ class RAGPipeline:
         citations = [Citation(**c) for c in pre_citations]
         latency_ms = int((time.perf_counter() - start) * 1000)
 
-        return RAGResult(
+        result = RAGResult(
             answer=answer,
             citations=citations,
             rewritten_query=rewritten,
@@ -201,6 +225,22 @@ class RAGPipeline:
             sufficient_context=True,
             latency_ms=latency_ms,
         )
+
+        # Cache the result for identical (query, top_k, filters)
+        await cache.set(
+            cache_key,
+            {
+                "answer": answer,
+                "citations": [c.model_dump() for c in citations],
+                "rewritten_query": rewritten,
+                "context_used": True,
+                "sufficient_context": True,
+                "latency_ms": latency_ms,
+            },
+            ttl=_RAG_CACHE_TTL,
+        )
+
+        return result
 
     async def stream(
         self,
