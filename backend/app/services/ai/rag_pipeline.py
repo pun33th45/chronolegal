@@ -2,6 +2,7 @@
 Full RAG pipeline:
 Query → Rewrite → Embed → [BM25] → RRF Fuse → Rerank → Build Context → LLM → Answer + Citations
 """
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
@@ -187,6 +188,7 @@ class RAGPipeline:
             question=query,
         )
         answer = await generate_text(user_prompt, system_prompt=LEGAL_QA_SYSTEM)
+        answer = self._strip_invalid_citations(answer, len(reranked))
 
         citations = [Citation(**c) for c in pre_citations]
         latency_ms = int((time.perf_counter() - start) * 1000)
@@ -284,6 +286,16 @@ class RAGPipeline:
         if filters.get("court"):
             where["court"] = {"$eq": filters["court"]}
         return where if where else None
+
+    @staticmethod
+    def _strip_invalid_citations(answer: str, num_docs: int) -> str:
+        """Remove [N] inline citations where N is outside [1, num_docs]."""
+        def _replace(m: re.Match) -> str:
+            nums = [n.strip() for n in m.group(1).split(",")]
+            valid = [n for n in nums if n.isdigit() and 1 <= int(n) <= num_docs]
+            return f"[{','.join(valid)}]" if valid else ""
+
+        return re.sub(r"\[([0-9,\s]+)\]", _replace, answer)
 
     def _format_history(self, history: list[Any]) -> str:
         if not history:

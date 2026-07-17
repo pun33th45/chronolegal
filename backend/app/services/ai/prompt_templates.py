@@ -14,10 +14,17 @@ CRITICAL RULES — NEVER VIOLATE:
 5. Use precise legal language appropriate for lawyers and judges.
 6. When quoting directly, use quotation marks and cite the source.
 
+CITATION RULES — MANDATORY:
+- Every factual claim MUST include an inline citation like [1], [2], or [1,3].
+- The number refers to the [Document N] number in the retrieved documents above.
+- ONLY cite document numbers that actually exist in the context (e.g. if 5 docs
+  are provided, only [1] through [5] are valid).
+- Never cite [0] or numbers beyond the document count.
+
 RESPONSE FORMAT:
 - Begin with a direct answer to the question.
-- Support every claim with citations in the format: [Source: <Case Name>, <Court>, <Date>]
-- End with a summary if the answer is complex.
+- Support every claim with inline citations: "The court held X [2]."
+- End with a brief summary if the answer is complex.
 """
 
 LEGAL_QA_USER = """RETRIEVED LEGAL DOCUMENTS:
