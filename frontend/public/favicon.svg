@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Dark navy background circle -->
+  <circle cx="32" cy="32" r="32" fill="#0F1B3D"/>
+
+  <!-- Balance scales beam -->
+  <line x1="20" y1="26" x2="44" y2="26" stroke="#C8A951" stroke-width="2" stroke-linecap="round"/>
+  <!-- Central pillar -->
+  <line x1="32" y1="18" x2="32" y2="46" stroke="#C8A951" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Top ornament -->
+  <circle cx="32" cy="18" r="2.5" fill="#C8A951"/>
+
+  <!-- Left pan hanging lines -->
+  <line x1="20" y1="26" x2="17" y2="32" stroke="#C8A951" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="20" y1="26" x2="23" y2="32" stroke="#C8A951" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Left pan -->
+  <path d="M15 32 Q20 36 25 32" stroke="#C8A951" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+
+  <!-- Right pan hanging lines -->
+  <line x1="44" y1="26" x2="41" y2="32" stroke="#C8A951" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="44" y1="26" x2="47" y2="32" stroke="#C8A951" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Right pan -->
+  <path d="M39 32 Q44 36 49 32" stroke="#C8A951" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+
+  <!-- Base of pillar -->
+  <line x1="26" y1="46" x2="38" y2="46" stroke="#C8A951" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- "CL" text hint — small teal accent dot -->
+  <circle cx="32" cy="54" r="2" fill="#0E7C7B" opacity="0.8"/>
+</svg>

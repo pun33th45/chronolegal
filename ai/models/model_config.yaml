@@ -1,0 +1,61 @@
+# ChronoLegal — AI Model Configuration
+#
+# These settings mirror the .env variables. Use this file for
+# documentation and as a reference when changing providers.
+
+embedding:
+  # Primary embedding model (HuggingFace)
+  model: BAAI/bge-large-en-v1.5
+  dimensions: 1024
+  normalize: true
+  device: cpu          # cpu | cuda | mps
+  batch_size: 32
+  max_seq_length: 512
+
+reranker:
+  # Cross-encoder for semantic reranking
+  model: cross-encoder/ms-marco-MiniLM-L-6-v2
+  top_k_retrieve: 50   # candidates from ChromaDB
+  top_k_rerank: 5      # passed to LLM context
+
+llm:
+  # Supported providers: ollama | openai | anthropic
+  # Switch by setting LLM_PROVIDER in .env
+  providers:
+    ollama:
+      base_url: http://ollama:11434
+      default_model: llama3.1:8b
+      alternatives:
+        - qwen3:8b
+        - mistral:7b
+        - gemma2:9b
+      streaming: true
+      temperature: 0.1     # Low temp for factual legal answers
+      max_tokens: 2048
+
+    openai:
+      default_model: gpt-4o-mini
+      alternatives:
+        - gpt-4o
+        - gpt-4-turbo
+      temperature: 0.1
+      max_tokens: 2048
+
+    anthropic:
+      default_model: claude-haiku-4-5-20251001
+      alternatives:
+        - claude-sonnet-4-6
+      temperature: 0.1
+      max_tokens: 2048
+
+chunking:
+  chunk_size: 300        # tokens per chunk
+  chunk_overlap: 50      # overlap between adjacent chunks
+  min_chunk_size: 50     # discard shorter chunks
+
+vector_store:
+  provider: chromadb
+  host: chroma
+  port: 8000
+  collection_name: legal_cases
+  distance_metric: cosine
