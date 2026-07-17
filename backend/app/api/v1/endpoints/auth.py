@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    deny_refresh_token,
     verify_refresh_token,
 )
 from app.core.config import settings
@@ -122,11 +123,11 @@ async def login_form(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     try:
-        user_id = verify_refresh_token(payload.refresh_token)
+        user_id = await verify_refresh_token(payload.refresh_token)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="Invalid or revoked refresh token",
         )
     svc = UserService(db)
     user = await svc.get_by_id(user_id)
@@ -135,6 +136,8 @@ async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
+    # Token rotation: deny the old token so it cannot be reused
+    await deny_refresh_token(payload.refresh_token)
     access_token = create_access_token(str(user.id))
     refresh_token_new = create_refresh_token(str(user.id))
     return TokenResponse(
@@ -143,6 +146,15 @@ async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=UserRead.model_validate(user),
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(payload: RefreshTokenRequest):
+    """Invalidate the refresh token so it cannot be used after logout."""
+    try:
+        await deny_refresh_token(payload.refresh_token)
+    except Exception:
+        pass  # always succeed; client should discard tokens regardless
 
 
 @router.get("/me", response_model=UserRead)
