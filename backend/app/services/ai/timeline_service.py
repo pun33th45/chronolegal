@@ -1,10 +1,23 @@
-import json
+from pydantic import BaseModel, model_validator
 
 from loguru import logger
 
 from app.schemas.case import TimelineEvent
+from app.services.ai.json_parser import parse_llm_json
 from app.services.ai.llm_provider import generate_text
 from app.services.ai.prompt_templates import TIMELINE_EXTRACTION
+
+
+class _TimelineList(BaseModel):
+    """Wraps a bare JSON array so parse_llm_json can validate it uniformly."""
+    events: list[TimelineEvent] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_array(cls, data: object) -> object:
+        if isinstance(data, list):
+            return {"events": data}
+        return data
 
 
 class TimelineService:
@@ -18,28 +31,10 @@ class TimelineService:
 
         try:
             raw = await generate_text(prompt)
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            raw = raw.strip().rstrip("```").strip()
-
-            events_data = json.loads(raw)
-            if not isinstance(events_data, list):
-                return []
-
-            events = []
-            for item in events_data:
-                if isinstance(item, dict) and item.get("date") and item.get("event"):
-                    events.append(TimelineEvent(**item))
-
+            parsed = await parse_llm_json(raw, _TimelineList, generate_fn=generate_text)
+            events = [e for e in parsed.events if e.date and e.event]
             events.sort(key=lambda e: e.date)
             return events
-
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Timeline JSON parse failed: {e}")
-            return []
         except Exception as e:
             logger.error(f"Timeline generation failed: {e}")
             return []

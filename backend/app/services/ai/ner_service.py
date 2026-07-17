@@ -1,8 +1,7 @@
-import json
-
 from loguru import logger
 
 from app.schemas.case import LegalEntityExtraction
+from app.services.ai.json_parser import parse_llm_json
 from app.services.ai.llm_provider import generate_text
 from app.services.ai.prompt_templates import NER_EXTRACTION
 
@@ -14,19 +13,7 @@ class NERService:
 
         try:
             raw = await generate_text(prompt)
-            # Strip markdown code blocks if present
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            raw = raw.strip().rstrip("```").strip()
-
-            data = json.loads(raw)
-            return LegalEntityExtraction(**data)
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"NER JSON parse failed: {e}. Returning empty extraction.")
-            return LegalEntityExtraction()
+            return await parse_llm_json(raw, LegalEntityExtraction, generate_fn=generate_text)
         except Exception as e:
             logger.error(f"NER extraction failed: {e}")
             return LegalEntityExtraction()
