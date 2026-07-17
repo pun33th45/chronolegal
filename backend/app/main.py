@@ -12,7 +12,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.api.v1.router import api_router
 from app.api.websocket import router as ws_router
 from app.core.config import settings
-from app.core.database import create_all_tables
+from app.core.database import run_migrations
 from app.core.exceptions import AppException
 from app.core.logging import setup_logging
 from app.core.redis import close_redis, get_redis
@@ -42,8 +42,8 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION} [{settings.APP_ENV}]")
 
-    await create_all_tables()
-    logger.info("Database initialized")
+    await run_migrations()
+    logger.info("Database migrations applied")
 
     try:
         redis = await get_redis()

@@ -1,5 +1,8 @@
+import asyncio
 from collections.abc import AsyncGenerator
 
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -41,10 +44,24 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+def _alembic_upgrade() -> None:
+    """Run alembic upgrade head synchronously (called from executor)."""
+    cfg = AlembicConfig("alembic.ini")
+    alembic_command.upgrade(cfg, "head")
+
+
+async def run_migrations() -> None:
+    """Apply all pending Alembic migrations (replaces create_all_tables)."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _alembic_upgrade)
+    logger.info("Alembic migrations applied")
+
+
 async def create_all_tables() -> None:
+    """Legacy helper retained for tests and scripts that bypass Alembic."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created successfully")
+    logger.info("Database tables created (create_all fallback)")
 
 
 async def drop_all_tables() -> None:
