@@ -121,7 +121,9 @@ async def login_form(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+async def refresh_token(
+    payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)
+):
     try:
         user_id = await verify_refresh_token(payload.refresh_token)
     except ValueError:
@@ -169,4 +171,6 @@ async def change_password(
     db: AsyncSession = Depends(get_db),
 ):
     svc = UserService(db)
-    await svc.change_password(current_user.id, payload.current_password, payload.new_password)
+    await svc.change_password(
+        current_user.id, payload.current_password, payload.new_password
+    )

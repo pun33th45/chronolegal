@@ -13,14 +13,18 @@ class ConversationService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def create(self, payload: ConversationCreate, user_id: uuid.UUID) -> Conversation:
+    async def create(
+        self, payload: ConversationCreate, user_id: uuid.UUID
+    ) -> Conversation:
         conv = Conversation(user_id=user_id, title=payload.title)
         self.db.add(conv)
         await self.db.flush()
         await self.db.refresh(conv)
         return conv
 
-    async def get(self, conversation_id: uuid.UUID, user_id: uuid.UUID) -> Conversation | None:
+    async def get(
+        self, conversation_id: uuid.UUID, user_id: uuid.UUID
+    ) -> Conversation | None:
         result = await self.db.execute(
             select(Conversation).where(
                 Conversation.id == conversation_id,

@@ -12,8 +12,12 @@ from app.services.ai.document_processor import DocumentProcessor
 
 router = APIRouter()
 
-ALLOWED_TYPES = {"application/pdf", "text/plain", "application/msword",
-                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+ALLOWED_TYPES = {
+    "application/pdf",
+    "text/plain",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 
 
 @router.post("/upload", status_code=status.HTTP_202_ACCEPTED)

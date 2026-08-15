@@ -35,12 +35,16 @@ class AnalyticsService:
         decision_types = await self.get_decision_type_stats()
 
         avg_length_result = await self.db.execute(
-            select(func.avg(LegalCase.text_length)).where(LegalCase.text_length.isnot(None))
+            select(func.avg(LegalCase.text_length)).where(
+                LegalCase.text_length.isnot(None)
+            )
         )
         avg_text_length = float(avg_length_result.scalar_one() or 0)
 
         avg_latency_result = await self.db.execute(
-            select(func.avg(SearchLog.latency_ms)).where(SearchLog.latency_ms.isnot(None))
+            select(func.avg(SearchLog.latency_ms)).where(
+                SearchLog.latency_ms.isnot(None)
+            )
         )
         avg_latency = float(avg_latency_result.scalar_one() or 0)
 
@@ -62,14 +66,16 @@ class AnalyticsService:
 
     async def get_top_acts(self, limit: int = 20) -> list[TopItem]:
         result = await self.db.execute(
-            text("""
+            text(
+                """
                 SELECT unnest(acts) AS act, COUNT(*) AS cnt
                 FROM legal_cases
                 WHERE acts IS NOT NULL
                 GROUP BY act
                 ORDER BY cnt DESC
                 LIMIT :limit
-            """),
+            """
+            ),
             {"limit": limit},
         )
         return [TopItem(name=row.act, count=row.cnt) for row in result.all()]
@@ -95,42 +101,48 @@ class AnalyticsService:
 
     async def get_top_judges(self, limit: int = 20) -> list[TopItem]:
         result = await self.db.execute(
-            text("""
+            text(
+                """
                 SELECT unnest(judges) AS judge, COUNT(*) AS cnt
                 FROM legal_cases
                 WHERE judges IS NOT NULL
                 GROUP BY judge
                 ORDER BY cnt DESC
                 LIMIT :limit
-            """),
+            """
+            ),
             {"limit": limit},
         )
         return [TopItem(name=row.judge, count=row.cnt) for row in result.all()]
 
     async def get_top_keywords(self, limit: int = 20) -> list[TopItem]:
         result = await self.db.execute(
-            text("""
+            text(
+                """
                 SELECT unnest(keywords) AS kw, COUNT(*) AS cnt
                 FROM legal_cases
                 WHERE keywords IS NOT NULL
                 GROUP BY kw
                 ORDER BY cnt DESC
                 LIMIT :limit
-            """),
+            """
+            ),
             {"limit": limit},
         )
         return [TopItem(name=row.kw, count=row.cnt) for row in result.all()]
 
     async def get_case_trends(self, years: int = 20) -> list[CaseTrend]:
         result = await self.db.execute(
-            text("""
+            text(
+                """
                 SELECT EXTRACT(YEAR FROM judgment_date)::int AS year, COUNT(*) AS cnt
                 FROM legal_cases
                 WHERE judgment_date IS NOT NULL
                   AND EXTRACT(YEAR FROM judgment_date) >= EXTRACT(YEAR FROM NOW()) - :years
                 GROUP BY year
                 ORDER BY year
-            """),
+            """
+            ),
             {"years": years},
         )
         return [CaseTrend(year=row.year, count=row.cnt) for row in result.all()]
@@ -160,6 +172,7 @@ class AnalyticsService:
         embedded = embedded_result.scalar_one() or 0
 
         from app.models.case import CaseChunk
+
         total_chunks = await self._count(CaseChunk)
         total_users = await self._count(User)
         total_searches = await self._count(SearchLog)
@@ -168,7 +181,9 @@ class AnalyticsService:
         chroma_count = await embedder.get_collection_count()
 
         avg_latency_result = await self.db.execute(
-            select(func.avg(SearchLog.latency_ms)).where(SearchLog.latency_ms.isnot(None))
+            select(func.avg(SearchLog.latency_ms)).where(
+                SearchLog.latency_ms.isnot(None)
+            )
         )
         avg_latency = float(avg_latency_result.scalar_one() or 0)
 

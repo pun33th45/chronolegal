@@ -7,6 +7,7 @@ Timeline extraction via map-reduce:
 
 The old truncate-to-10k approach missed events in long judgments.
 """
+
 import asyncio
 import re
 from pydantic import BaseModel, model_validator
@@ -24,6 +25,7 @@ _OVERLAP_CHARS = 500
 
 class _TimelineList(BaseModel):
     """Wraps a bare JSON array so parse_llm_json can validate it uniformly."""
+
     events: list[TimelineEvent] = []
 
     @model_validator(mode="before")
@@ -38,7 +40,9 @@ def _tokenize(text: str) -> set[str]:
     return set(re.sub(r"[^\w\s]", "", text.lower()).split())
 
 
-def _is_duplicate(event_a: TimelineEvent, event_b: TimelineEvent, threshold: float = 0.7) -> bool:
+def _is_duplicate(
+    event_a: TimelineEvent, event_b: TimelineEvent, threshold: float = 0.7
+) -> bool:
     """True if two events have the same date and highly overlapping event descriptions."""
     if event_a.date.strip() != event_b.date.strip():
         return False
@@ -82,7 +86,9 @@ class TimelineService:
         while start < len(text):
             end = start + _CHUNK_CHARS
             chunks.append(text[start:end])
-            start = end - _OVERLAP_CHARS  # overlap to avoid missing cross-boundary events
+            start = (
+                end - _OVERLAP_CHARS
+            )  # overlap to avoid missing cross-boundary events
             if start <= 0:
                 break
 

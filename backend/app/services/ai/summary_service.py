@@ -16,7 +16,9 @@ class SummaryService:
         "bullet": SUMMARY_BULLET,
     }
 
-    async def generate(self, case: any, summary_type: str, max_length: int) -> SummaryResponse:
+    async def generate(
+        self, case: any, summary_type: str, max_length: int
+    ) -> SummaryResponse:
         text = case.full_text or case.headnotes or case.summary or ""
         if not text.strip():
             return SummaryResponse(

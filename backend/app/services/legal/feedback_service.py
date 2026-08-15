@@ -28,7 +28,9 @@ class FeedbackService:
             rating=rating,
             is_helpful=is_helpful,
             comment=comment,
-            retrieved_doc_ids=",".join(retrieved_doc_ids) if retrieved_doc_ids else None,
+            retrieved_doc_ids=(
+                ",".join(retrieved_doc_ids) if retrieved_doc_ids else None
+            ),
         )
         self.db.add(feedback)
         await self.db.flush()

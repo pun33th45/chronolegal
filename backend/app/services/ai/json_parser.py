@@ -6,6 +6,7 @@ Robust LLM JSON parser with three-stage fallback:
 
 Validates the result against a Pydantic schema before returning.
 """
+
 import json
 import re
 from typing import Any, Awaitable, Callable, TypeVar
@@ -96,11 +97,17 @@ async def parse_llm_json(
             fixed_raw = await generate_fn(fix_prompt)
             fixed_cleaned = _strip_fences(fixed_raw)
             fixed_match = _JSON_BLOCK_RE.search(fixed_raw)
-            candidate = fixed_cleaned if fixed_cleaned else (fixed_match.group(0) if fixed_match else "")
+            candidate = (
+                fixed_cleaned
+                if fixed_cleaned
+                else (fixed_match.group(0) if fixed_match else "")
+            )
             if candidate:
                 return _to_schema(_load(candidate), schema)
         except Exception as exc:
             logger.warning(f"parse_llm_json retry failed ({schema.__name__}): {exc}")
 
-    logger.warning(f"parse_llm_json: all stages failed for {schema.__name__}, returning defaults")
+    logger.warning(
+        f"parse_llm_json: all stages failed for {schema.__name__}, returning defaults"
+    )
     return schema()

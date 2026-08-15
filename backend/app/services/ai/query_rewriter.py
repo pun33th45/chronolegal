@@ -1,6 +1,7 @@
 """
 Query rewriter — expands and clarifies legal queries before retrieval.
 """
+
 from app.core.redis import cache
 from app.services.ai.llm_provider import generate_text
 

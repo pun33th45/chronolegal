@@ -10,7 +10,9 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 _DENYLIST_PREFIX = "rt_deny"
-_DENYLIST_TTL = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86_400  # same lifetime as token
+_DENYLIST_TTL = (
+    settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86_400
+)  # same lifetime as token
 
 
 def hash_password(password: str) -> str:
@@ -21,24 +23,34 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str | Any, expires_delta: timedelta | None = None) -> str:
+def create_access_token(
+    subject: str | Any, expires_delta: timedelta | None = None
+) -> str:
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     payload = {"sub": str(subject), "exp": expire, "type": "access"}
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
 
 
 def create_refresh_token(subject: str | Any) -> str:
     """Create a refresh token with a unique jti claim for denylist support."""
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
+    )
     payload = {
         "sub": str(subject),
         "exp": expire,
         "type": "refresh",
-        "jti": str(uuid.uuid4()),  # unique token ID — used to invalidate on logout/rotation
+        "jti": str(
+            uuid.uuid4()
+        ),  # unique token ID — used to invalidate on logout/rotation
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
 
 
 def decode_token(token: str) -> dict[str, Any]:
@@ -68,6 +80,7 @@ async def deny_refresh_token(token: str) -> None:
     if not jti:
         return
     from app.core.redis import cache
+
     await cache.set(f"{_DENYLIST_PREFIX}:{jti}", 1, ttl=_DENYLIST_TTL)
 
 
@@ -83,6 +96,7 @@ async def verify_refresh_token(token: str) -> str:
     jti = payload.get("jti")
     if jti:
         from app.core.redis import cache
+
         if await cache.exists(f"{_DENYLIST_PREFIX}:{jti}"):
             raise ValueError("Refresh token has been revoked")
 

@@ -2,6 +2,7 @@
 WebSocket endpoint for real-time bidirectional chat.
 Clients connect once, then send/receive JSON messages.
 """
+
 import json
 from typing import Any
 
@@ -78,7 +79,9 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                     continue
 
                 # Stream back chunks
-                await manager.send(user_id, {"type": "start", "conversation_id": conversation_id})
+                await manager.send(
+                    user_id, {"type": "start", "conversation_id": conversation_id}
+                )
 
                 full_answer = ""
                 try:
@@ -86,9 +89,14 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                         conv_svc = ConversationService(db)
                         if conversation_id:
                             import uuid
-                            conv = await conv_svc.get(uuid.UUID(conversation_id), uuid.UUID(user_id))
+
+                            conv = await conv_svc.get(
+                                uuid.UUID(conversation_id), uuid.UUID(user_id)
+                            )
                         else:
-                            conv = await conv_svc.create(ConversationCreate(), uuid.UUID(user_id))
+                            conv = await conv_svc.create(
+                                ConversationCreate(), uuid.UUID(user_id)
+                            )
                             conversation_id = str(conv.id)
 
                         history = await conv_svc.get_messages(conv.id, limit=10)
@@ -109,8 +117,11 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                     async with AsyncSessionLocal() as db:
                         conv_svc = ConversationService(db)
                         import uuid
+
                         await conv_svc.add_message(
-                            uuid.UUID(conversation_id), role="assistant", content=full_answer
+                            uuid.UUID(conversation_id),
+                            role="assistant",
+                            content=full_answer,
                         )
 
                 except Exception as e:
@@ -118,7 +129,9 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                     await manager.send(user_id, {"type": "error", "error": str(e)})
 
             else:
-                await manager.send(user_id, {"type": "error", "error": f"Unknown type: {msg_type}"})
+                await manager.send(
+                    user_id, {"type": "error", "error": f"Unknown type: {msg_type}"}
+                )
 
     except WebSocketDisconnect:
         manager.disconnect(user_id)

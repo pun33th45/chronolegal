@@ -22,7 +22,9 @@ class SearchLog(Base, UUIDMixin, TimestampMixin):
     result_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     top_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    search_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # semantic | hybrid | keyword
+    search_type: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # semantic | hybrid | keyword
     filters_used: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def __repr__(self) -> str:

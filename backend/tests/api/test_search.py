@@ -1,4 +1,5 @@
 """Integration tests for the /search endpoints."""
+
 import pytest
 from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
@@ -32,17 +33,22 @@ MOCK_SEARCH_RESPONSE = {
 @pytest.fixture
 def mock_search_service():
     from app.schemas.search import SearchResponse, SearchResult, SearchFilters
+
     mock_result = SearchResponse(**MOCK_SEARCH_RESPONSE)
     with patch("app.api.v1.endpoints.search.SearchService") as MockSvc:
         instance = MockSvc.return_value
         instance.search = AsyncMock(return_value=mock_result)
-        instance.get_suggestions = AsyncMock(return_value=["Maneka Gandhi", "Kesavananda Bharati"])
+        instance.get_suggestions = AsyncMock(
+            return_value=["Maneka Gandhi", "Kesavananda Bharati"]
+        )
         yield instance
 
 
 @pytest.mark.asyncio
 async def test_search_requires_auth(client: AsyncClient):
-    resp = await client.post("/api/v1/search/", json={"query": "Article 21", "top_k": 5})
+    resp = await client.post(
+        "/api/v1/search/", json={"query": "Article 21", "top_k": 5}
+    )
     assert resp.status_code == 401
 
 
@@ -88,7 +94,9 @@ async def test_search_filters_endpoint(
 ):
     with patch("app.services.legal.case_service.CaseService") as MockCaseSvc:
         instance = MockCaseSvc.return_value
-        instance.get_distinct_courts = AsyncMock(return_value=["Supreme Court of India"])
+        instance.get_distinct_courts = AsyncMock(
+            return_value=["Supreme Court of India"]
+        )
         instance.get_distinct_judges = AsyncMock(return_value=["Justice Chandrachud"])
         instance.get_distinct_acts = AsyncMock(return_value=["Constitution of India"])
         instance.get_distinct_decision_types = AsyncMock(return_value=["Allowed"])

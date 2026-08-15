@@ -68,10 +68,13 @@ async def get_similar_cases(
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.ai.search_service import SearchService
+
     svc = CaseService(db)
     case = await svc.get_by_case_id(case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
     search_svc = SearchService()
-    return await search_svc.find_similar_cases(case_id=case_id, case_name=case.case_name, top_k=top_k)
+    return await search_svc.find_similar_cases(
+        case_id=case_id, case_name=case.case_name, top_k=top_k
+    )

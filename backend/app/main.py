@@ -25,12 +25,14 @@ async def _warmup_models() -> None:
     loop = asyncio.get_event_loop()
     try:
         from app.services.ai.embedding_service import _get_embedding_model
+
         await loop.run_in_executor(None, _get_embedding_model)
         logger.info("Embedding model warmed up")
     except Exception as exc:
         logger.warning(f"Embedding model warmup failed (non-fatal): {exc}")
     try:
         from app.services.ai.reranker import _get_cross_encoder
+
         await loop.run_in_executor(None, _get_cross_encoder)
         logger.info("Reranker warmed up")
     except Exception as exc:
@@ -40,7 +42,9 @@ async def _warmup_models() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION} [{settings.APP_ENV}]")
+    logger.info(
+        f"Starting {settings.APP_NAME} v{settings.APP_VERSION} [{settings.APP_ENV}]"
+    )
 
     await run_migrations()
     logger.info("Database migrations applied")
@@ -82,6 +86,7 @@ app.add_middleware(
 )
 
 app.state.limiter = limiter
+
 
 # --- Exception Handlers ---
 @app.exception_handler(AppException)

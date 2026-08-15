@@ -19,9 +19,7 @@ class CaseService:
         return result.scalar_one_or_none()
 
     async def get_by_db_id(self, db_id: uuid.UUID) -> LegalCase | None:
-        result = await self.db.execute(
-            select(LegalCase).where(LegalCase.id == db_id)
-        )
+        result = await self.db.execute(select(LegalCase).where(LegalCase.id == db_id))
         return result.scalar_one_or_none()
 
     async def list_cases(
@@ -44,7 +42,11 @@ class CaseService:
             query = query.where(LegalCase.acts.any(act))
 
         offset = (page - 1) * page_size
-        query = query.order_by(LegalCase.judgment_date.desc()).offset(offset).limit(page_size)
+        query = (
+            query.order_by(LegalCase.judgment_date.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -58,9 +60,7 @@ class CaseService:
 
     async def get_unembedded(self, limit: int = 1000) -> list[LegalCase]:
         result = await self.db.execute(
-            select(LegalCase)
-            .where(LegalCase.is_embedded == False)
-            .limit(limit)
+            select(LegalCase).where(LegalCase.is_embedded == False).limit(limit)
         )
         return list(result.scalars().all())
 

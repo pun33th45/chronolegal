@@ -1,6 +1,7 @@
 """
 Text processing utilities for legal documents.
 """
+
 import re
 import unicodedata
 

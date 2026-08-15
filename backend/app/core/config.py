@@ -1,17 +1,26 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, PostgresDsn, RedisDsn, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    PostgresDsn,
+    RedisDsn,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Values shipped in .env.example — forbidden in production
-_DEFAULT_SECRETS: frozenset[str] = frozenset({
-    "your-super-secret-key-change-in-production-min-32-chars",
-    "your-jwt-secret-key-change-in-production",
-    "chronolegal_password",
-    "redis_password",
-    "",
-})
+_DEFAULT_SECRETS: frozenset[str] = frozenset(
+    {
+        "your-super-secret-key-change-in-production-min-32-chars",
+        "your-jwt-secret-key-change-in-production",
+        "chronolegal_password",
+        "redis_password",
+        "",
+    }
+)
 
 
 class Settings(BaseSettings):

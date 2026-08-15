@@ -4,6 +4,7 @@ Supported: ollama, openai, anthropic
 
 Each provider's client is built once and cached per unique configuration.
 """
+
 from functools import lru_cache
 from typing import AsyncGenerator
 
@@ -26,6 +27,7 @@ def _build_llm(
     """Build and cache one LLM client per unique (provider, model, …) tuple."""
     if provider == "ollama":
         from langchain_ollama import ChatOllama
+
         return ChatOllama(
             model=model,
             base_url=base_url,
@@ -36,6 +38,7 @@ def _build_llm(
 
     if provider == "openai":
         from langchain_openai import ChatOpenAI
+
         return ChatOpenAI(
             model=model,
             api_key=settings.OPENAI_API_KEY,
@@ -46,6 +49,7 @@ def _build_llm(
 
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
+
         return ChatAnthropic(
             model=model,
             api_key=settings.ANTHROPIC_API_KEY,

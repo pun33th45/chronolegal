@@ -27,21 +27,15 @@ class UserService:
         return user
 
     async def get_by_id(self, user_id: str | uuid.UUID) -> User | None:
-        result = await self.db.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> User | None:
-        result = await self.db.execute(
-            select(User).where(User.email == email)
-        )
+        result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
     async def get_by_username(self, username: str) -> User | None:
-        result = await self.db.execute(
-            select(User).where(User.username == username)
-        )
+        result = await self.db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
     async def authenticate(self, email: str, password: str) -> User | None:
@@ -76,6 +70,9 @@ class UserService:
     async def list_all(self, page: int = 1, page_size: int = 50) -> list[User]:
         offset = (page - 1) * page_size
         result = await self.db.execute(
-            select(User).offset(offset).limit(page_size).order_by(User.created_at.desc())
+            select(User)
+            .offset(offset)
+            .limit(page_size)
+            .order_by(User.created_at.desc())
         )
         return list(result.scalars().all())

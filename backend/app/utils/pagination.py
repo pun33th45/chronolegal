@@ -1,4 +1,5 @@
 """Pagination helper shared across all list endpoints."""
+
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 

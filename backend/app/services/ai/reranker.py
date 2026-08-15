@@ -1,6 +1,7 @@
 """
 Cross-encoder reranker — scores query-document pairs for precise ranking.
 """
+
 import asyncio
 from functools import lru_cache
 

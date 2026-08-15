@@ -1,13 +1,14 @@
 """
 Input validators for legal queries and user inputs.
 """
+
 import re
 
 
 _BLOCKED_PATTERNS = [
     r"<script[^>]*>",
     r"javascript:",
-    r"on\w+\s*=",            # onclick=, onload=, etc.
+    r"on\w+\s*=",  # onclick=, onload=, etc.
     r";\s*DROP\s+TABLE",
     r"UNION\s+SELECT",
     r"1\s*=\s*1\s*--",
@@ -22,7 +23,7 @@ def is_safe_query(text: str) -> bool:
 
 def sanitize_search_query(query: str) -> str:
     """Strip HTML, leading/trailing whitespace, limit length."""
-    query = re.sub(r"<[^>]+>", "", query)   # strip HTML tags
+    query = re.sub(r"<[^>]+>", "", query)  # strip HTML tags
     query = query.strip()
     return query[:1000]
 

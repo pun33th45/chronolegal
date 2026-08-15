@@ -1,11 +1,18 @@
 """Tests for utility functions."""
+
 import pytest
-from app.utils.text import clean_legal_text, extract_section_numbers, extract_citations, word_count
+from app.utils.text import (
+    clean_legal_text,
+    extract_section_numbers,
+    extract_citations,
+    word_count,
+)
 from app.utils.validators import is_safe_query, sanitize_search_query, is_valid_case_id
 from app.utils.pagination import Page
 
 
 # ── text utils ──────────────────────────────────────────────────────────────
+
 
 def test_clean_legal_text_removes_control_chars():
     raw = "Legal\x00text\x01with\x02control chars"
@@ -21,7 +28,9 @@ def test_clean_legal_text_normalizes_unicode():
 
 
 def test_extract_section_numbers():
-    text = "Under Section 302 and Section 420 of IPC, and Article 21 of the Constitution."
+    text = (
+        "Under Section 302 and Section 420 of IPC, and Article 21 of the Constitution."
+    )
     sections = extract_section_numbers(text)
     assert "Section 302" in sections or "302" in str(sections)
 
@@ -38,6 +47,7 @@ def test_word_count():
 
 
 # ── validator utils ──────────────────────────────────────────────────────────
+
 
 def test_is_safe_query_blocks_xss():
     assert not is_safe_query("<script>alert(1)</script>")
@@ -66,6 +76,7 @@ def test_is_valid_case_id():
 
 
 # ── pagination ───────────────────────────────────────────────────────────────
+
 
 def test_page_dataclass():
     items = [1, 2, 3]

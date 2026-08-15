@@ -1,6 +1,7 @@
 """
 Handles uploaded PDF/DOCX/TXT documents, extracts text, chunks, and embeds.
 """
+
 import asyncio
 import uuid
 
@@ -104,11 +105,13 @@ class DocumentProcessor:
     def _extract_pdf(self, content: bytes) -> str:
         import io
         from pypdf import PdfReader
+
         reader = PdfReader(io.BytesIO(content))
         return "\n".join(page.extract_text() or "" for page in reader.pages)
 
     def _extract_docx(self, content: bytes) -> str:
         import io
         from docx import Document
+
         doc = Document(io.BytesIO(content))
         return "\n".join(para.text for para in doc.paragraphs)

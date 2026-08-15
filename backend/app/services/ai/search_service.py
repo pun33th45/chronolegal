@@ -1,6 +1,7 @@
 """
 Hybrid search: semantic (ChromaDB) + keyword (BM25) with fusion.
 """
+
 import time
 from typing import Any
 
@@ -70,20 +71,24 @@ class SearchService:
         results = []
         for rank, (orig_idx, rerank_score) in enumerate(reranked):
             meta = metadatas[orig_idx] if orig_idx < len(metadatas) else {}
-            semantic_score = 1 - (distances[orig_idx] if orig_idx < len(distances) else 0)
+            semantic_score = 1 - (
+                distances[orig_idx] if orig_idx < len(distances) else 0
+            )
 
-            results.append(SearchResult(
-                case_id=meta.get("case_id", ""),
-                case_name=meta.get("case_name", "Unknown"),
-                court=meta.get("court"),
-                judges=None,
-                judgment_date=meta.get("date"),
-                acts=None,
-                chunk_content=documents[orig_idx],
-                similarity_score=round(semantic_score, 4),
-                rank=rank + 1,
-                chunk_id=f"{meta.get('case_id', '')}__chunk_{meta.get('chunk_index', 0)}",
-            ))
+            results.append(
+                SearchResult(
+                    case_id=meta.get("case_id", ""),
+                    case_name=meta.get("case_name", "Unknown"),
+                    court=meta.get("court"),
+                    judges=None,
+                    judgment_date=meta.get("date"),
+                    acts=None,
+                    chunk_content=documents[orig_idx],
+                    similarity_score=round(semantic_score, 4),
+                    rank=rank + 1,
+                    chunk_id=f"{meta.get('case_id', '')}__chunk_{meta.get('chunk_index', 0)}",
+                )
+            )
 
         return SearchResponse(
             query=query,
@@ -119,7 +124,9 @@ class SearchService:
     async def find_similar_cases(
         self, case_id: str, case_name: str, top_k: int = 5
     ) -> list[dict]:
-        raw = await self.embedder.similarity_search(query=case_name, n_results=top_k + 5)
+        raw = await self.embedder.similarity_search(
+            query=case_name, n_results=top_k + 5
+        )
         metas = raw.get("metadatas", [[]])[0]
         distances = raw.get("distances", [[]])[0]
 
@@ -130,12 +137,14 @@ class SearchService:
             if cid == case_id or cid in seen_cases:
                 continue
             seen_cases.add(cid)
-            results.append({
-                "case_id": cid,
-                "case_name": meta.get("case_name", "Unknown"),
-                "court": meta.get("court"),
-                "similarity_score": round(1 - dist, 4),
-            })
+            results.append(
+                {
+                    "case_id": cid,
+                    "case_name": meta.get("case_name", "Unknown"),
+                    "court": meta.get("court"),
+                    "similarity_score": round(1 - dist, 4),
+                }
+            )
             if len(results) >= top_k:
                 break
 

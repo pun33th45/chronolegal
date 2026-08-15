@@ -18,7 +18,9 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-    title: Mapped[str] = mapped_column(String(500), nullable=False, default="New Conversation")
+    title: Mapped[str] = mapped_column(
+        String(500), nullable=False, default="New Conversation"
+    )
     is_archived: Mapped[bool] = mapped_column(default=False, nullable=False)
     message_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
@@ -45,7 +47,9 @@ class Message(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # user | assistant | system
+    role: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # user | assistant | system
     content: Mapped[str] = mapped_column(Text, nullable=False)
     citations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
     metadata_: Mapped[dict[str, Any] | None] = mapped_column(
@@ -55,7 +59,9 @@ class Message(Base, UUIDMixin, TimestampMixin):
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Relationships
-    conversation: Mapped[Conversation] = relationship("Conversation", back_populates="messages")
+    conversation: Mapped[Conversation] = relationship(
+        "Conversation", back_populates="messages"
+    )
 
     def __repr__(self) -> str:
         return f"<Message id={self.id} role={self.role}>"

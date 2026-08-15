@@ -71,7 +71,9 @@ async def chat(
     # Auto-title conversation from first message
     if conversation.message_count == 0:
         title = payload.message[:80] + ("..." if len(payload.message) > 80 else "")
-        await conv_svc.update(conversation.id, current_user.id, ConversationUpdate(title=title))
+        await conv_svc.update(
+            conversation.id, current_user.id, ConversationUpdate(title=title)
+        )
 
     return ChatResponse(
         conversation_id=conversation.id,
@@ -194,7 +196,9 @@ async def update_conversation(
     return updated
 
 
-@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_conversation(
     conversation_id: uuid.UUID,
     current_user=Depends(get_current_user),

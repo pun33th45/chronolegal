@@ -7,6 +7,7 @@ LegalChunker  — legal-structure-aware: splits on numbered paragraphs / section
                 nearest section header in chunk metadata so citations can say
                 "para 14" or "HELD".
 """
+
 import re
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -18,8 +19,8 @@ from app.core.config import settings
 # Patterns that signal a new section in an Indian judgment
 # ---------------------------------------------------------------------------
 _SECTION_RE = re.compile(
-    r"^(\d+)\.\s"                                        # "14. The court held…"
-    r"|^(para(?:graph)?\s*\d+[\.:)])"                    # "Para 14:" / "Paragraph 3."
+    r"^(\d+)\.\s"  # "14. The court held…"
+    r"|^(para(?:graph)?\s*\d+[\.:)])"  # "Para 14:" / "Paragraph 3."
     r"|^((?:JUDGMENT|ORDER|FACTS?|ISSUE|HELD|ANALYSIS"
     r"|REASONING|CONCLUSION|BACKGROUND|SUBMISSIONS?"
     r"|ARGUMENTS?|FINDING|RELIEF|DECREE)\b.*)",
@@ -39,7 +40,7 @@ def _split_by_legal_structure(text: str) -> list[tuple[str, str | None]]:
     last_header: str | None = None
 
     for m in _SECTION_RE.finditer(text):
-        chunk = text[last_end:m.start()].strip()
+        chunk = text[last_end : m.start()].strip()
         if chunk:
             sections.append((chunk, last_header))
         # Pick the first non-None group as the header label
@@ -56,6 +57,7 @@ def _split_by_legal_structure(text: str) -> list[tuple[str, str | None]]:
 # ---------------------------------------------------------------------------
 # Generic chunker
 # ---------------------------------------------------------------------------
+
 
 class TextChunker:
     def __init__(
@@ -101,6 +103,7 @@ class TextChunker:
 # Legal-structure-aware chunker
 # ---------------------------------------------------------------------------
 
+
 class LegalChunker(TextChunker):
     """
     Splits on numbered paragraphs / section headers first, then recursively
@@ -111,13 +114,13 @@ class LegalChunker(TextChunker):
 
     _MIN_SECTIONS = 3  # fall back to recursive if too few sections found
 
-    def chunk_legal(
-        self, text: str, base_metadata: dict
-    ) -> list[tuple[str, dict]]:
+    def chunk_legal(self, text: str, base_metadata: dict) -> list[tuple[str, dict]]:
         sections = _split_by_legal_structure(text)
 
         if len(sections) < self._MIN_SECTIONS:
-            logger.debug("LegalChunker: too few sections, falling back to recursive splitting")
+            logger.debug(
+                "LegalChunker: too few sections, falling back to recursive splitting"
+            )
             return self.chunk_with_metadata(text, base_metadata)
 
         result: list[tuple[str, dict]] = []

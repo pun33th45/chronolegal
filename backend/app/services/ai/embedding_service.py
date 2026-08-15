@@ -2,6 +2,7 @@
 Embedding service using BAAI/bge-large-en-v1.5.
 Handles batched encoding, caching, and ChromaDB insertion.
 """
+
 import asyncio
 import hashlib
 import uuid
@@ -69,17 +70,13 @@ class EmbeddingService:
             return cached
 
         loop = asyncio.get_event_loop()
-        embedding = await loop.run_in_executor(
-            None, self.model.embed_query, text
-        )
+        embedding = await loop.run_in_executor(None, self.model.embed_query, text)
         await cache.set(cache_key, embedding, ttl=86400)
         return embedding
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         loop = asyncio.get_event_loop()
-        embeddings = await loop.run_in_executor(
-            None, self.model.embed_documents, texts
-        )
+        embeddings = await loop.run_in_executor(None, self.model.embed_documents, texts)
         return embeddings
 
     async def upsert_chunks(
@@ -93,9 +90,9 @@ class EmbeddingService:
 
         batch_size = settings.EMBEDDINGS_BATCH_SIZE
         for i in range(0, len(chunks), batch_size):
-            batch_texts = chunks[i:i + batch_size]
-            batch_meta = metadatas[i:i + batch_size]
-            batch_ids = ids[i:i + batch_size]
+            batch_texts = chunks[i : i + batch_size]
+            batch_meta = metadatas[i : i + batch_size]
+            batch_ids = ids[i : i + batch_size]
 
             embeddings = await self.embed_texts(batch_texts)
 
@@ -109,7 +106,9 @@ class EmbeddingService:
                     ids=batch_ids,
                 ),
             )
-            logger.debug(f"Upserted batch {i // batch_size + 1}: {len(batch_texts)} chunks")
+            logger.debug(
+                f"Upserted batch {i // batch_size + 1}: {len(batch_texts)} chunks"
+            )
 
     async def similarity_search(
         self,
@@ -149,6 +148,7 @@ class EmbeddingService:
         try:
             from app.core.database import AsyncSessionLocal
             from app.services.legal.case_service import CaseService
+
             async with AsyncSessionLocal() as db:
                 case_svc = CaseService(db)
                 cases = await case_svc.get_unembedded(limit=10000)
@@ -161,14 +161,19 @@ class EmbeddingService:
                         {"status": "running", "progress": progress},
                         ttl=3600,
                     )
-            await cache.set(f"reindex:{task_id}", {"status": "done", "progress": 100}, ttl=3600)
+            await cache.set(
+                f"reindex:{task_id}", {"status": "done", "progress": 100}, ttl=3600
+            )
             logger.info(f"Full reindex completed: task_id={task_id}")
         except Exception as e:
             logger.error(f"Reindex failed: {e}")
-            await cache.set(f"reindex:{task_id}", {"status": "failed", "error": str(e)}, ttl=3600)
+            await cache.set(
+                f"reindex:{task_id}", {"status": "failed", "error": str(e)}, ttl=3600
+            )
 
     async def _embed_case(self, case: Any) -> None:
         from app.services.ai.chunker import TextChunker
+
         chunker = TextChunker()
         chunks = chunker.chunk(case.full_text or "")
         if not chunks:

@@ -2,6 +2,7 @@
 Robust date parsing for Indian legal documents.
 Handles many real-world date formats found in judgments.
 """
+
 from datetime import date
 from typing import Optional
 
@@ -38,6 +39,7 @@ def parse_date(raw: str) -> Optional[date]:
             pass
 
     import datetime
+
     for fmt in _FORMATS:
         try:
             return datetime.datetime.strptime(raw, fmt).date()

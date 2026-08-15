@@ -26,6 +26,7 @@ async def get_search_logs(
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.legal.search_log_service import SearchLogService
+
     svc = SearchLogService(db)
     return await svc.get_all(page=page, page_size=page_size)
 
@@ -36,6 +37,7 @@ async def trigger_reindex(
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.ai.embedding_service import EmbeddingService
+
     svc = EmbeddingService()
     task_id = await svc.trigger_full_reindex()
     return {"task_id": task_id, "message": "Reindexing started in background"}
@@ -49,5 +51,6 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.legal.user_service import UserService
+
     svc = UserService(db)
     return await svc.list_all(page=page, page_size=page_size)

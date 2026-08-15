@@ -61,6 +61,7 @@ async def get_available_filters(
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.legal.case_service import CaseService
+
     svc = CaseService(db)
     return {
         "courts": await svc.get_distinct_courts(),

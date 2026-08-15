@@ -13,7 +13,9 @@ class NERService:
 
         try:
             raw = await generate_text(prompt)
-            return await parse_llm_json(raw, LegalEntityExtraction, generate_fn=generate_text)
+            return await parse_llm_json(
+                raw, LegalEntityExtraction, generate_fn=generate_text
+            )
         except Exception as e:
             logger.error(f"NER extraction failed: {e}")
             return LegalEntityExtraction()

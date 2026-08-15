@@ -2,6 +2,7 @@
 Full RAG pipeline:
 Query → Rewrite → Embed → [BM25] → RRF Fuse → Rerank → Build Context → LLM → Answer + Citations
 """
+
 import hashlib
 import json
 import re
@@ -78,6 +79,7 @@ class RAGPipeline:
     def _bm25_rank(self, query: str, documents: list[str]) -> list[int]:
         """Return document indices sorted by BM25 score descending."""
         from rank_bm25 import BM25Okapi
+
         tokenized = [doc.lower().split() for doc in documents]
         bm25 = BM25Okapi(tokenized)
         scores = bm25.get_scores(query.lower().split())
@@ -103,7 +105,9 @@ class RAGPipeline:
 
     @staticmethod
     def _cache_key(query: str, top_k: int, filters: dict | None) -> str:
-        payload = json.dumps({"q": query, "k": top_k, "f": filters or {}}, sort_keys=True)
+        payload = json.dumps(
+            {"q": query, "k": top_k, "f": filters or {}}, sort_keys=True
+        )
         return f"rag:{hashlib.md5(payload.encode()).hexdigest()}"
 
     async def run(
@@ -179,16 +183,18 @@ class RAGPipeline:
                 f"Court: {meta.get('court', 'N/A')} | Date: {meta.get('date', 'N/A')}\n"
                 f"Content: {doc}\n"
             )
-            pre_citations.append({
-                "rank": rank + 1,
-                "case_id": meta.get("case_id", ""),
-                "case_name": meta.get("case_name", "Unknown"),
-                "chunk_id": f"{meta.get('case_id', '')}__chunk_{meta.get('chunk_index', 0)}",
-                "content": doc[:500],
-                "similarity_score": round(score, 4),
-                "court": meta.get("court"),
-                "date": meta.get("date"),
-            })
+            pre_citations.append(
+                {
+                    "rank": rank + 1,
+                    "case_id": meta.get("case_id", ""),
+                    "case_name": meta.get("case_name", "Unknown"),
+                    "chunk_id": f"{meta.get('case_id', '')}__chunk_{meta.get('chunk_index', 0)}",
+                    "content": doc[:500],
+                    "similarity_score": round(score, 4),
+                    "court": meta.get("court"),
+                    "date": meta.get("date"),
+                }
+            )
 
         context = "\n\n---\n\n".join(context_parts)
         history_text = self._format_history(conversation_history or [])
@@ -294,16 +300,18 @@ class RAGPipeline:
                 f"Court: {meta.get('court', 'N/A')} | Date: {meta.get('date', 'N/A')}\n"
                 f"Content: {doc}\n"
             )
-            citations_data.append(Citation(
-                rank=rank + 1,
-                case_id=meta.get("case_id", ""),
-                case_name=meta.get("case_name", "Unknown"),
-                chunk_id=f"{meta.get('case_id', '')}__chunk_{meta.get('chunk_index', 0)}",
-                content=doc[:500],
-                similarity_score=round(score, 4),
-                court=meta.get("court"),
-                date=meta.get("date"),
-            ))
+            citations_data.append(
+                Citation(
+                    rank=rank + 1,
+                    case_id=meta.get("case_id", ""),
+                    case_name=meta.get("case_name", "Unknown"),
+                    chunk_id=f"{meta.get('case_id', '')}__chunk_{meta.get('chunk_index', 0)}",
+                    content=doc[:500],
+                    similarity_score=round(score, 4),
+                    court=meta.get("court"),
+                    date=meta.get("date"),
+                )
+            )
 
         # Yield citations only after the threshold gate passes
         yield StreamChunk(type="citation", citations=citations_data)
@@ -330,6 +338,7 @@ class RAGPipeline:
     @staticmethod
     def _strip_invalid_citations(answer: str, num_docs: int) -> str:
         """Remove [N] inline citations where N is outside [1, num_docs]."""
+
         def _replace(m: re.Match) -> str:
             nums = [n.strip() for n in m.group(1).split(",")]
             valid = [n for n in nums if n.isdigit() and 1 <= int(n) <= num_docs]

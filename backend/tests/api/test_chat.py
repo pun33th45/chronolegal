@@ -1,4 +1,5 @@
 """Integration tests for the /chat endpoints."""
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient
