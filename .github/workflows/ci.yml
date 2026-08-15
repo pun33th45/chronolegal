@@ -80,6 +80,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://chronolegal:chronolegal@localhost:5432/chronolegal_test
           REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: "ci-test-secret-key-not-for-production"
           JWT_SECRET_KEY: ci-test-secret-key-not-for-production
           LLM_PROVIDER: ollama
           ENVIRONMENT: test
