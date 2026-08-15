@@ -167,7 +167,10 @@ class AnalyticsService:
     async def get_admin_stats(self) -> AdminStats:
         total_cases = await self._count(LegalCase)
         embedded_result = await self.db.execute(
-            select(func.count(LegalCase.id)).where(LegalCase.is_embedded == True)
+            select(func.count(LegalCase.id)).where(
+                LegalCase.is_embedded
+                == True  # noqa: E712 -- SQLAlchemy column, not a bool
+            )
         )
         embedded = embedded_result.scalar_one() or 0
 

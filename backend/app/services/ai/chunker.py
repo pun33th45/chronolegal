@@ -95,7 +95,8 @@ class TextChunker:
             }
             result.append((chunk, meta))
             if start != -1:
-                char_offset = end  # advance past this chunk; backing off caused wrong offsets for repeated text
+                # advance past this chunk; backing off caused wrong offsets for repeated text
+                char_offset = end
         return result
 
 

@@ -1,14 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import (
-    AnyHttpUrl,
-    Field,
-    PostgresDsn,
-    RedisDsn,
-    field_validator,
-    model_validator,
-)
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Values shipped in .env.example — forbidden in production

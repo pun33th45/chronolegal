@@ -7,13 +7,12 @@ import hashlib
 import json
 import re
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
 from loguru import logger
 
 from app.core.config import settings
-from app.core.exceptions import InsufficientContextError
 from app.core.redis import cache
 from app.schemas.chat import Citation, RelatedCase, StreamChunk
 from app.services.ai.embedding_service import EmbeddingService
@@ -145,11 +144,13 @@ class RAGPipeline:
 
         documents = raw_results.get("documents", [[]])[0]
         metadatas = raw_results.get("metadatas", [[]])[0]
-        distances = raw_results.get("distances", [[]])[0]
 
         if not documents:
             return RAGResult(
-                answer="The uploaded legal corpus does not contain sufficient evidence to answer this question.",
+                answer=(
+                    "The uploaded legal corpus does not contain sufficient "
+                    "evidence to answer this question."
+                ),
                 citations=[],
                 rewritten_query=rewritten,
                 context_used=False,
@@ -162,7 +163,6 @@ class RAGPipeline:
         fused_order = self._fuse_results(rewritten, documents, dense_order)
         fused_docs = [documents[i] for i in fused_order]
         fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
-        fused_dist = [distances[i] if i < len(distances) else 0.0 for i in fused_order]
 
         reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
 
@@ -172,7 +172,6 @@ class RAGPipeline:
         for rank, (orig_idx, score) in enumerate(reranked):
             doc = fused_docs[orig_idx]
             meta = fused_meta[orig_idx] if orig_idx < len(fused_meta) else {}
-            similarity = 1 - (fused_dist[orig_idx] if orig_idx < len(fused_dist) else 0)
 
             context_parts.append(
                 f"[Document {rank + 1}]\n"
@@ -200,7 +199,10 @@ class RAGPipeline:
         max_score = max(score for _, score in reranked) if reranked else 0
         if max_score < settings.SIMILARITY_THRESHOLD:
             return RAGResult(
-                answer="The uploaded legal corpus does not contain sufficient evidence to answer this question.",
+                answer=(
+                    "The uploaded legal corpus does not contain sufficient "
+                    "evidence to answer this question."
+                ),
                 citations=[Citation(**c) for c in pre_citations],
                 rewritten_query=rewritten,
                 context_used=True,
@@ -252,7 +254,10 @@ class RAGPipeline:
         top_k: int | None = None,
         filters: dict[str, Any] | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
-        _INSUFFICIENT = "The uploaded legal corpus does not contain sufficient evidence to answer this question."
+        _INSUFFICIENT = (
+            "The uploaded legal corpus does not contain sufficient "
+            "evidence to answer this question."
+        )
         top_k = top_k or settings.TOP_K_RERANKED
 
         rewritten = await rewrite_query(query)
@@ -265,7 +270,6 @@ class RAGPipeline:
 
         documents = raw_results.get("documents", [[]])[0]
         metadatas = raw_results.get("metadatas", [[]])[0]
-        distances = raw_results.get("distances", [[]])[0]
 
         if not documents:
             yield StreamChunk(type="text", content=_INSUFFICIENT)
@@ -276,7 +280,6 @@ class RAGPipeline:
         fused_order = self._fuse_results(rewritten, documents, dense_order)
         fused_docs = [documents[i] for i in fused_order]
         fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
-        fused_dist = [distances[i] if i < len(distances) else 0.0 for i in fused_order]
 
         reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
 

@@ -25,7 +25,9 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
     message_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="conversations")  # type: ignore[name-defined]  # noqa: F821
+    user: Mapped["User"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "User", back_populates="conversations"
+    )
     messages: Mapped[list["Message"]] = relationship(
         "Message",
         back_populates="conversation",

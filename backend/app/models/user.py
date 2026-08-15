@@ -1,8 +1,6 @@
-import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -31,7 +29,7 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
 
     # Relationships
-    conversations: Mapped[list["Conversation"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
+    conversations: Mapped[list["Conversation"]] = relationship(  # type: ignore  # noqa: F821
         "Conversation",
         back_populates="user",
         cascade="all, delete-orphan",

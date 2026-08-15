@@ -1,5 +1,3 @@
-import pytest
-
 from app.services.ai.chunker import TextChunker
 
 

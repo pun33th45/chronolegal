@@ -32,7 +32,7 @@ MOCK_SEARCH_RESPONSE = {
 
 @pytest.fixture
 def mock_search_service():
-    from app.schemas.search import SearchFilters, SearchResponse, SearchResult
+    from app.schemas.search import SearchResponse
 
     mock_result = SearchResponse(**MOCK_SEARCH_RESPONSE)
     with patch("app.api.v1.endpoints.search.SearchService") as MockSvc:

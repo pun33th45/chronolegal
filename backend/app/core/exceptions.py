@@ -51,7 +51,8 @@ class VectorDBError(AppException):
 class InsufficientContextError(AppException):
     def __init__(self) -> None:
         super().__init__(
-            "The uploaded legal corpus does not contain sufficient evidence to answer this question.",
+            "The uploaded legal corpus does not contain sufficient "
+            "evidence to answer this question.",
             status_code=422,
         )
 

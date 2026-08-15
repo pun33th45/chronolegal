@@ -9,7 +9,7 @@ from functools import lru_cache
 from typing import AsyncGenerator
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
 from app.core.config import settings

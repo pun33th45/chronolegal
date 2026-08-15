@@ -3,7 +3,10 @@ Prompt templates for the legal QA system.
 All prompts enforce grounded answers and citation requirements.
 """
 
-LEGAL_QA_SYSTEM = """You are ChronoLegal AI, an expert legal research assistant specializing in Indian law and jurisprudence.
+LEGAL_QA_SYSTEM = (
+    "You are ChronoLegal AI, an expert legal research assistant "
+    "specializing in Indian law and jurisprudence."
+    """
 
 CRITICAL RULES — NEVER VIOLATE:
 1. Answer ONLY based on the provided legal documents. NEVER use outside knowledge.
@@ -26,6 +29,7 @@ RESPONSE FORMAT:
 - Support every claim with inline citations: "The court held X [2]."
 - End with a brief summary if the answer is complex.
 """
+)
 
 LEGAL_QA_USER = """RETRIEVED LEGAL DOCUMENTS:
 {context}
@@ -42,7 +46,10 @@ USER QUESTION: {question}
 Provide a precise, well-cited answer based solely on the retrieved documents above."""
 
 
-SUMMARY_CONCISE = """You are a legal summarization expert. Summarize the following legal judgment in {max_length} words or fewer.
+SUMMARY_CONCISE = (
+    "You are a legal summarization expert. Summarize the following "
+    "legal judgment in {max_length} words or fewer."
+    """
 
 Focus on:
 - Key legal issues decided
@@ -54,6 +61,7 @@ Judgment:
 {text}
 
 Concise Summary:"""
+)
 
 
 SUMMARY_DETAILED = """You are a senior advocate summarizing a legal judgment for research purposes.
@@ -72,7 +80,10 @@ Judgment:
 Detailed Summary:"""
 
 
-SUMMARY_BULLET = """Summarize the following legal judgment in bullet points (maximum {max_length} words total).
+SUMMARY_BULLET = (
+    "Summarize the following legal judgment in bullet points "
+    "(maximum {max_length} words total)."
+    """
 
 Use these sections:
 • **Case Overview**: [1-2 bullets]
@@ -85,19 +96,29 @@ Judgment:
 {text}
 
 Bullet Summary:"""
+)
 
 
-TIMELINE_EXTRACTION = """Extract all chronological events from this legal judgment. Return a JSON array of objects with keys: "date" (string), "event" (string), "description" (string).
-
-Only include events that have specific dates mentioned. Dates can be in any format — preserve them as written.
+TIMELINE_EXTRACTION = (
+    "Extract all chronological events from this legal judgment. Return a "
+    'JSON array of objects with keys: "date" (string), "event" (string), '
+    '"description" (string).'
+    "\n\n"
+    "Only include events that have specific dates mentioned. Dates can be "
+    "in any format — preserve them as written."
+    """
 
 Judgment text:
 {text}
 
 Return only valid JSON, no other text:"""
+)
 
 
-NER_EXTRACTION = """Extract named legal entities from the following text. Return a JSON object with these keys:
+NER_EXTRACTION = (
+    "Extract named legal entities from the following text. Return a "
+    "JSON object with these keys:"
+    """
 - "judges": list of judge names
 - "courts": list of court names
 - "acts": list of legislation/acts mentioned
@@ -112,3 +133,4 @@ Text:
 {text}
 
 Return only valid JSON:"""
+)

@@ -2,7 +2,6 @@ import uuid
 from datetime import date
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.case import CaseChunk, LegalCase
@@ -60,7 +59,12 @@ class CaseService:
 
     async def get_unembedded(self, limit: int = 1000) -> list[LegalCase]:
         result = await self.db.execute(
-            select(LegalCase).where(LegalCase.is_embedded == False).limit(limit)
+            select(LegalCase)
+            .where(
+                LegalCase.is_embedded
+                == False  # noqa: E712 -- SQLAlchemy column, not a bool
+            )
+            .limit(limit)
         )
         return list(result.scalars().all())
 

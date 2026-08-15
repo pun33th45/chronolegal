@@ -54,7 +54,8 @@ class ConversationService:
             select(Conversation)
             .where(
                 Conversation.user_id == user_id,
-                Conversation.is_archived == False,
+                Conversation.is_archived
+                == False,  # noqa: E712 -- SQLAlchemy column, not a bool
             )
             .order_by(Conversation.updated_at.desc())
             .offset(offset)

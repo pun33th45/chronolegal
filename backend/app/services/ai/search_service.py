@@ -3,12 +3,7 @@ Hybrid search: semantic (ChromaDB) + keyword (BM25) with fusion.
 """
 
 import time
-from typing import Any
 
-from loguru import logger
-from rank_bm25 import BM25Okapi
-
-from app.core.config import settings
 from app.core.redis import cache
 from app.schemas.search import SearchFilters, SearchResponse, SearchResult
 from app.services.ai.embedding_service import EmbeddingService

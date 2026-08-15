@@ -1,7 +1,5 @@
 """Tests for utility functions."""
 
-import pytest
-
 from app.utils.pagination import Page
 from app.utils.text import (
     clean_legal_text,

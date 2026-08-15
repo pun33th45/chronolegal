@@ -1,14 +1,10 @@
-import io
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.services.ai.document_processor import DocumentProcessor
-from app.services.legal.case_service import CaseService
 
 router = APIRouter()
 
