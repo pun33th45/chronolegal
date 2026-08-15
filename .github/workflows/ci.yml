@@ -95,7 +95,7 @@ jobs:
 
   # ── Frontend lint & build ──────────────────────────────────────────────────
   frontend:
-    name: Frontend (Node ${{ env.NODE_VERSION }})
+    name: Frontend (Node 20)
     runs-on: ubuntu-latest
 
     defaults:
