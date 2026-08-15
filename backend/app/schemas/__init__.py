@@ -1,4 +1,6 @@
-from app.schemas.user import UserCreate, UserRead, UserUpdate, UserLogin, TokenResponse
+from app.schemas.analytics import AnalyticsDashboard
+from app.schemas.case import CaseChunkRead, LegalCaseRead, LegalCaseSummary
+from app.schemas.chat import ChatRequest, ChatResponse, Citation
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationRead,
@@ -6,10 +8,8 @@ from app.schemas.conversation import (
     MessageCreate,
     MessageRead,
 )
-from app.schemas.case import LegalCaseRead, LegalCaseSummary, CaseChunkRead
 from app.schemas.search import SearchRequest, SearchResponse, SearchResult
-from app.schemas.chat import ChatRequest, ChatResponse, Citation
-from app.schemas.analytics import AnalyticsDashboard
+from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserRead, UserUpdate
 
 __all__ = [
     "UserCreate",

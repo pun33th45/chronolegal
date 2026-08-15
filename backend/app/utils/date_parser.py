@@ -8,7 +8,6 @@ from typing import Optional
 
 from dateutil import parser as dateutil_parser
 
-
 _FORMATS = [
     "%d/%m/%Y",
     "%d-%m-%Y",

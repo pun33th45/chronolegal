@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.database import get_db
-from app.schemas.case import LegalCaseRead, LegalCaseSummary, CaseChunkRead
+from app.schemas.case import CaseChunkRead, LegalCaseRead, LegalCaseSummary
 from app.services.legal.case_service import CaseService
 
 router = APIRouter()

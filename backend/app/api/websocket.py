@@ -9,11 +9,11 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
 
+from app.core.database import AsyncSessionLocal
 from app.core.security import verify_access_token
+from app.schemas.conversation import ConversationCreate
 from app.services.ai.rag_pipeline import RAGPipeline
 from app.services.legal.conversation_service import ConversationService
-from app.core.database import AsyncSessionLocal
-from app.schemas.conversation import ConversationCreate
 
 router = APIRouter()
 

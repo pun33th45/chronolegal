@@ -4,7 +4,6 @@ Input validators for legal queries and user inputs.
 
 import re
 
-
 _BLOCKED_PATTERNS = [
     r"<script[^>]*>",
     r"javascript:",

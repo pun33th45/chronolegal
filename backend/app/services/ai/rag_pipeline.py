@@ -18,10 +18,7 @@ from app.core.redis import cache
 from app.schemas.chat import Citation, RelatedCase, StreamChunk
 from app.services.ai.embedding_service import EmbeddingService
 from app.services.ai.llm_provider import generate_text, stream_text
-from app.services.ai.prompt_templates import (
-    LEGAL_QA_SYSTEM,
-    LEGAL_QA_USER,
-)
+from app.services.ai.prompt_templates import LEGAL_QA_SYSTEM, LEGAL_QA_USER
 from app.services.ai.query_rewriter import rewrite_query
 from app.services.ai.reranker import Reranker
 

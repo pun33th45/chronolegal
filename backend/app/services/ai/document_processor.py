@@ -104,6 +104,7 @@ class DocumentProcessor:
 
     def _extract_pdf(self, content: bytes) -> str:
         import io
+
         from pypdf import PdfReader
 
         reader = PdfReader(io.BytesIO(content))
@@ -111,6 +112,7 @@ class DocumentProcessor:
 
     def _extract_docx(self, content: bytes) -> str:
         import io
+
         from docx import Document
 
         doc = Document(io.BytesIO(content))

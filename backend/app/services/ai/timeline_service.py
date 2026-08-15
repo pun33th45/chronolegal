@@ -10,9 +10,9 @@ The old truncate-to-10k approach missed events in long judgments.
 
 import asyncio
 import re
-from pydantic import BaseModel, model_validator
 
 from loguru import logger
+from pydantic import BaseModel, model_validator
 
 from app.schemas.case import TimelineEvent
 from app.services.ai.json_parser import parse_llm_json

@@ -16,8 +16,8 @@ from app.schemas.conversation import (
     ConversationUpdate,
     ConversationWithMessages,
 )
-from app.services.legal.conversation_service import ConversationService
 from app.services.ai.rag_pipeline import RAGPipeline
+from app.services.legal.conversation_service import ConversationService
 
 router = APIRouter()
 

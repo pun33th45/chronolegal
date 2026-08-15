@@ -1,9 +1,9 @@
 """Integration tests for the /search endpoints."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
-from httpx import AsyncClient
 
+import pytest
+from httpx import AsyncClient
 
 MOCK_SEARCH_RESPONSE = {
     "query": "Article 21",
@@ -32,7 +32,7 @@ MOCK_SEARCH_RESPONSE = {
 
 @pytest.fixture
 def mock_search_service():
-    from app.schemas.search import SearchResponse, SearchResult, SearchFilters
+    from app.schemas.search import SearchFilters, SearchResponse, SearchResult
 
     mock_result = SearchResponse(**MOCK_SEARCH_RESPONSE)
     with patch("app.api.v1.endpoints.search.SearchService") as MockSvc:

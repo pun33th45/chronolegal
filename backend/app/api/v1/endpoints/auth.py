@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import (
     create_access_token,
@@ -11,14 +12,13 @@ from app.core.security import (
     deny_refresh_token,
     verify_refresh_token,
 )
-from app.core.config import settings
 from app.schemas.user import (
+    ChangePasswordRequest,
+    RefreshTokenRequest,
+    TokenResponse,
     UserCreate,
     UserLogin,
     UserRead,
-    TokenResponse,
-    RefreshTokenRequest,
-    ChangePasswordRequest,
 )
 from app.services.legal.user_service import UserService
 
@@ -30,8 +30,8 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> UserRead:
-    from app.core.security import verify_access_token
     from app.core.exceptions import credentials_exception
+    from app.core.security import verify_access_token
 
     try:
         user_id = verify_access_token(token)

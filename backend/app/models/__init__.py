@@ -1,8 +1,8 @@
-from app.models.user import User
+from app.models.case import CaseChunk, LegalCase
 from app.models.conversation import Conversation, Message
-from app.models.case import LegalCase, CaseChunk
 from app.models.feedback import SearchFeedback
 from app.models.search_log import SearchLog
+from app.models.user import User
 
 __all__ = [
     "User",

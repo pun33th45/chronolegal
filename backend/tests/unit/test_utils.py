@@ -1,15 +1,15 @@
 """Tests for utility functions."""
 
 import pytest
+
+from app.utils.pagination import Page
 from app.utils.text import (
     clean_legal_text,
-    extract_section_numbers,
     extract_citations,
+    extract_section_numbers,
     word_count,
 )
-from app.utils.validators import is_safe_query, sanitize_search_query, is_valid_case_id
-from app.utils.pagination import Page
-
+from app.utils.validators import is_safe_query, is_valid_case_id, sanitize_search_query
 
 # ── text utils ──────────────────────────────────────────────────────────────
 
