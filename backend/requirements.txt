@@ -5,8 +5,8 @@
 # Web Framework
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-uvloop==0.21.0
-httptools==0.6.4
+uvloop==0.21.0; sys_platform != "win32"  # unsupported on Windows; uvicorn falls back to asyncio's default loop
+httptools==0.6.4; sys_platform != "win32"  # unsupported on Windows; uvicorn falls back to h11
 
 # Async
 anyio==4.7.0
@@ -31,14 +31,15 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.18
 cryptography==43.0.3
 
-# AI & ML - loose bounds to allow pip to resolve compatible versions
-langchain>=0.3.9
-langchain-community>=0.3.9
-langchain-core>=0.3.21
-langchain-chroma>=1.0.0
-langchain-ollama>=0.2.1
-langchain-openai>=0.2.11
-langchain-anthropic>=0.3.0
+# AI & ML - bounded to the 0.3.x LangChain generation this codebase's imports target.
+# LangChain's ecosystem moved to a breaking 1.x line in late 2026 (e.g. langchain-core 1.x,
+# langchain 1.x); unbounded ">=" pins here let pip drift onto that incompatible generation.
+langchain>=0.3.9,<0.4.0
+langchain-community>=0.3.9,<0.4.0
+langchain-core>=0.3.21,<0.4.0
+langchain-ollama>=0.2.1,<1.0.0
+langchain-openai>=0.2.11,<1.0.0
+langchain-anthropic>=0.3.0,<1.0.0
 torch>=2.1.0
 sentence-transformers>=3.0.0
 transformers>=4.40.0
@@ -57,6 +58,7 @@ pandas>=2.0.0
 numpy>=1.22.4
 pydantic==2.10.3
 pydantic-settings==2.6.1
+email-validator>=2.0.0  # required by pydantic.EmailStr, used in app/schemas/user.py
 
 # HTTP Client
 httpx==0.28.0
@@ -89,7 +91,7 @@ opentelemetry-sdk>=1.20.0
 # Text Processing
 rank-bm25==0.2.2
 rapidfuzz>=3.0.0
-langchain-text-splitters>=0.3.0
+langchain-text-splitters>=0.3.0,<1.0.0
 datasets>=2.0.0
 
 # Date/Time
