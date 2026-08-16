@@ -371,6 +371,16 @@ jobs:
           VITE_WS_URL=ws://localhost/ws
           EOF
 
+      # One-off probe: the chromadb/chroma:latest image has neither python3
+      # nor curl (both confirmed failing in prior runs of this job) — find
+      # out what actually exists before guessing a third healthcheck tool.
+      - name: Probe chromadb image for available healthcheck tools
+        run: |
+          docker run --rm --entrypoint sh chromadb/chroma:latest -c \
+            'echo "--- shells ---"; command -v sh bash; \
+             echo "--- http tools ---"; command -v curl wget python3 python nc ncat busybox; \
+             echo "--- /etc/os-release ---"; cat /etc/os-release 2>&1' || true
+
       - name: Build and start the production stack
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
