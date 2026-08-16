@@ -86,8 +86,8 @@ async def test_concurrent_run_migrations_does_not_race(monkeypatch):
             )
         assert version == "0002"
 
-        async def _table_names(conn):
-            return set(sa.inspect(conn).get_table_names())
+        def _table_names(sync_conn):
+            return set(sa.inspect(sync_conn).get_table_names())
 
         async with test_engine.connect() as conn:
             table_names = await conn.run_sync(_table_names)
