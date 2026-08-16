@@ -452,7 +452,7 @@ jobs:
           # dropping the request body. -k because this is our own
           # throwaway self-signed cert, not a public CA one.
           BASE=https://localhost/api/v1
-          EMAIL=ci-smoke@chronolegal.test
+          EMAIL=ci-smoke-test@chronolegal-smoketest.dev
           PASSWORD=CiSmokeTest123
 
           # Diagnostic: no -f here yet, so a real HTTP-level failure prints
@@ -513,7 +513,7 @@ jobs:
           BASE=https://localhost/api/v1
 
           login=$(curl -skf -X POST "$BASE/auth/login" -H "Content-Type: application/json" \
-            -d '{"email": "ci-smoke@chronolegal.test", "password": "CiSmokeTest123"}')
+            -d '{"email": "ci-smoke-test@chronolegal-smoketest.dev", "password": "CiSmokeTest123"}')
           refresh_token=$(echo "$login" | jq -r .refresh_token)
 
           docker compose -f docker-compose.yml -f docker-compose.prod.yml stop redis
