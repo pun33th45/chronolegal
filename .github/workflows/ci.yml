@@ -156,13 +156,76 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build frontend image (cache only)
+      - name: Build frontend image (loaded locally)
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: false
+          load: true
+          tags: chronolegal-frontend:build-check
+          build-args: |
+            VITE_API_BASE_URL=https://ci-build-check.invalid/api/v1
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Vite inlines import.meta.env.VITE_* at build time. Without a matching
+      # ARG in frontend/Dockerfile, Docker silently drops build-args it
+      # doesn't declare, and the bundle falls back to the http://localhost:8000
+      # default baked into the frontend code — breaking every real user's
+      # browser in production while every prior check (build succeeds, lint
+      # passes, type-check passes) stays green. This proves the build-arg
+      # actually reaches the compiled bundle, not just that the Dockerfile
+      # declares it.
+      - name: Verify VITE_API_BASE_URL build-arg reaches the compiled bundle
+        run: |
+          docker run --rm --entrypoint sh chronolegal-frontend:build-check -c \
+            "grep -rl 'ci-build-check.invalid' /usr/share/nginx/html/assets/" \
+            || (echo "VITE_API_BASE_URL build-arg did not reach the built bundle" && exit 1)
+          if docker run --rm --entrypoint sh chronolegal-frontend:build-check -c \
+              "grep -rl 'localhost:8000' /usr/share/nginx/html/assets/ 2>/dev/null"; then
+            echo "Bundle still contains the localhost:8000 fallback — build-arg wiring is broken"
+            exit 1
+          fi
+
+      # Proves the production image actually boots and serves — not just
+      # that `docker build` succeeds.
+      - name: Boot frontend image and verify it serves the SPA
+        run: |
+          docker run -d --name chronolegal-frontend-smoke -p 8080:80 chronolegal-frontend:build-check
+          for i in $(seq 1 10); do
+            if curl -sf http://localhost:8080/ > /dev/null 2>&1; then
+              echo "Frontend serving after $((i))s"
+              curl -s http://localhost:8080/ | grep -qi "<div id=\"root\"" \
+                || (echo "Response did not contain the expected SPA root element" && exit 1)
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Frontend never started serving within 10s"
+          docker logs chronolegal-frontend-smoke
+          exit 1
+
+      - name: Tear down frontend smoke container
+        if: always()
+        run: |
+          docker stop chronolegal-frontend-smoke || true
+          docker rm chronolegal-frontend-smoke || true
+
+      - name: Build nginx image (loaded locally)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./nginx
+          push: false
+          load: true
+          tags: chronolegal-nginx:build-check
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # `nginx -t` validates the actual config this session rewrote (the new
+      # upstream frontend block + proxy_pass in default.conf) against a real
+      # nginx binary, rather than relying on it merely "looking right".
+      - name: Validate nginx configuration syntax
+        run: docker run --rm chronolegal-nginx:build-check nginx -t
 
   # ── Docker runtime smoke test ───────────────────────────────────────────────
   # The job above only proves `docker build` succeeds — it never starts the
