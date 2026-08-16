@@ -44,6 +44,12 @@ nginx/ssl/
 *.csv
 *.hdf5
 
+# Database backups — contain real production data (see
+# docs/deployment.md's Backup & Restore section); never commit these.
+/backups/
+*.dump
+*.dump.partial
+
 # Models
 *.bin
 *.safetensors

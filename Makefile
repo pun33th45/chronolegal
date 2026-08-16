@@ -2,7 +2,7 @@
 # ChronoLegal - Makefile
 # =============================================================================
 
-.PHONY: help setup dev prod down logs test lint clean data-pipeline test-e2e test-perf
+.PHONY: help setup dev prod down logs test lint clean data-pipeline test-e2e test-perf backup restore
 
 help:
 	@echo "ChronoLegal Make targets:"
@@ -19,6 +19,8 @@ help:
 	@echo "  make create-admin  - Create admin user"
 	@echo "  make test-e2e      - Run Playwright end-to-end tests"
 	@echo "  make test-perf     - Run Locust load tests (headless, 60s)"
+	@echo "  make backup        - Create a pg_dump backup into ./backups"
+	@echo "  make restore       - Restore: make restore BACKUP=<file> DB=<target_db> [FORCE=--force]"
 
 setup:
 	@cp -n .env.example .env || true
@@ -68,3 +70,11 @@ data-pipeline:
 	docker compose exec backend python /app/../scripts/data/02_preprocess.py
 	docker compose exec backend python /app/../scripts/data/03_ingest_to_db.py
 	docker compose exec backend python /app/../scripts/data/04_generate_embeddings.py
+
+backup:
+	set -a && . ./.env && set +a && bash scripts/backup/backup_db.sh
+
+restore:
+	@test -n "$(BACKUP)" || (echo "Usage: make restore BACKUP=<file> DB=<target_db> [FORCE=--force]" && exit 1)
+	@test -n "$(DB)" || (echo "Usage: make restore BACKUP=<file> DB=<target_db> [FORCE=--force]" && exit 1)
+	set -a && . ./.env && set +a && bash scripts/backup/restore_db.sh "$(BACKUP)" "$(DB)" $(FORCE)
