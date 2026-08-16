@@ -455,10 +455,21 @@ jobs:
           EMAIL=ci-smoke@chronolegal.test
           PASSWORD=CiSmokeTest123
 
-          curl -skf -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "$(jq -n \
+          # Diagnostic: no -f here yet, so a real HTTP-level failure prints
+          # its actual status/body instead of curl silently swallowing it.
+          register_status=$(curl -sk -o /tmp/register_response.json -w "%{http_code}" -X POST "$BASE/auth/register" \
+            -H "Content-Type: application/json" -d "$(jq -n \
             --arg email "$EMAIL" --arg pw "$PASSWORD" \
-            '{email:$email, username:"ci_smoke_user", full_name:"CI Smoke Test", password:$pw}')" \
-            | jq .
+            '{email:$email, username:"ci_smoke_user", full_name:"CI Smoke Test", password:$pw}')")
+          echo "register status: $register_status"
+          cat /tmp/register_response.json
+          echo ""
+          if [ "$register_status" != "201" ]; then
+            echo "--- nginx error.log ---"
+            timeout 10 docker exec chronolegal-nginx cat /var/log/nginx/error.log 2>&1 || true
+            echo "Register did not return 201 (got $register_status)"
+            exit 1
+          fi
 
           login=$(curl -skf -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "$(jq -n \
             --arg email "$EMAIL" --arg pw "$PASSWORD" '{email:$email, password:$pw}')")
