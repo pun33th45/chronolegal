@@ -52,4 +52,7 @@ async def get_upload_status(
     current_user=Depends(get_current_user),
 ):
     processor = DocumentProcessor()
-    return await processor.get_task_status(task_id)
+    status = await processor.get_task_status(task_id, str(current_user.id))
+    if status is None:
+        raise HTTPException(status_code=404, detail="Upload task not found")
+    return status

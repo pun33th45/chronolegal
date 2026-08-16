@@ -11,6 +11,12 @@ from app.core.redis import cache
 from app.services.ai.chunker import TextChunker
 from app.services.ai.embedding_service import EmbeddingService
 
+# The event loop only holds a *weak* reference to tasks created via
+# asyncio.create_task — an unreferenced task can be garbage-collected
+# mid-execution, silently abandoning upload processing. Keeping a strong
+# reference here (and discarding it once done) prevents that.
+_background_tasks: set[asyncio.Task] = set()
+
 
 class DocumentProcessor:
     async def process_upload(
@@ -23,18 +29,21 @@ class DocumentProcessor:
         task_id = str(uuid.uuid4())
         await cache.set(
             f"upload:{task_id}",
-            {"status": "queued", "filename": filename},
+            {"status": "queued", "filename": filename, "user_id": user_id},
             ttl=3600,
         )
-        asyncio.create_task(
+        task = asyncio.create_task(
             self._process(task_id, content, filename, content_type, user_id)
         )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
         return task_id
 
-    async def get_task_status(self, task_id: str) -> dict:
+    async def get_task_status(self, task_id: str, user_id: str) -> dict | None:
+        """Returns None if the task doesn't exist or belongs to another user."""
         status = await cache.get(f"upload:{task_id}")
-        if status is None:
-            return {"status": "not_found"}
+        if status is None or status.get("user_id") != user_id:
+            return None
         return status
 
     async def _process(
@@ -45,17 +54,26 @@ class DocumentProcessor:
         content_type: str,
         user_id: str,
     ) -> None:
+        # Every status update below must carry user_id/filename forward —
+        # cache.set() replaces the whole stored value, so omitting them
+        # would silently break get_task_status's ownership check the
+        # moment processing moves past "queued".
+        base = {"user_id": user_id, "filename": filename}
         try:
-            await cache.set(f"upload:{task_id}", {"status": "extracting"}, ttl=3600)
+            await cache.set(
+                f"upload:{task_id}", {**base, "status": "extracting"}, ttl=3600
+            )
             text = await self._extract_text(content, content_type, filename)
 
-            await cache.set(f"upload:{task_id}", {"status": "chunking"}, ttl=3600)
+            await cache.set(
+                f"upload:{task_id}", {**base, "status": "chunking"}, ttl=3600
+            )
             chunker = TextChunker()
             chunks = chunker.chunk(text)
 
             await cache.set(
                 f"upload:{task_id}",
-                {"status": "embedding", "chunks": len(chunks)},
+                {**base, "status": "embedding", "chunks": len(chunks)},
                 ttl=3600,
             )
 
@@ -77,7 +95,12 @@ class DocumentProcessor:
 
             await cache.set(
                 f"upload:{task_id}",
-                {"status": "done", "doc_id": doc_id, "chunk_count": len(chunks)},
+                {
+                    **base,
+                    "status": "done",
+                    "doc_id": doc_id,
+                    "chunk_count": len(chunks),
+                },
                 ttl=3600,
             )
             logger.info(f"Document processed: task_id={task_id}, chunks={len(chunks)}")
@@ -85,7 +108,9 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Document processing failed: task_id={task_id}, error={e}")
             await cache.set(
-                f"upload:{task_id}", {"status": "failed", "error": str(e)}, ttl=3600
+                f"upload:{task_id}",
+                {**base, "status": "failed", "error": str(e)},
+                ttl=3600,
             )
 
     async def _extract_text(

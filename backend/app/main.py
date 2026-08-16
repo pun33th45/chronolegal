@@ -56,7 +56,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis not available: {e}")
 
-    await _warmup_models()
+    if settings.SKIP_MODEL_WARMUP:
+        logger.info("Skipping model warmup (SKIP_MODEL_WARMUP=true)")
+    else:
+        await _warmup_models()
 
     yield
 

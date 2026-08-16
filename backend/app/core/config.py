@@ -152,6 +152,15 @@ class Settings(BaseSettings):
     ENABLE_METRICS: bool = True
     METRICS_PORT: int = 9090
 
+    # Startup — skips the embedding-model/reranker warmup in app startup's
+    # lifespan (see app/main.py). The models are never pre-baked into the
+    # Docker image, so a cold container downloads them from HuggingFace on
+    # first boot, which can take minutes; CI's Docker runtime smoke test
+    # (verifying migrations/Redis/health wiring, not model loading) sets
+    # this to skip that download entirely. Defaults to False so normal
+    # deployments still get the first-request latency benefit of warmup.
+    SKIP_MODEL_WARMUP: bool = False
+
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> "Settings":
         if self.APP_ENV != "production":

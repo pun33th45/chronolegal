@@ -42,3 +42,12 @@ def test_development_env_allows_default_secrets():
 
     assert settings.APP_ENV == "development"
     assert settings.is_production is False
+
+
+def test_skip_model_warmup_defaults_to_false():
+    """Normal deployments must still get the warmup's first-request
+    latency benefit unless explicitly opted out (e.g. CI's Docker runtime
+    smoke test)."""
+    settings = Settings(SECRET_KEY="dev-only-test-key")
+
+    assert settings.SKIP_MODEL_WARMUP is False
