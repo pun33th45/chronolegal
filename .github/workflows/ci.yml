@@ -404,6 +404,17 @@ jobs:
             sleep 3
           done
           echo "nginx never became healthy within 180s"
+          # nginx/nginx.conf logs to real files (/var/log/nginx/*.log), not
+          # stdout/stderr, so `docker compose logs` never shows anything for
+          # this container (unlike frontend's default nginx config, which
+          # does symlink to stdout) — dump the healthcheck probe output and
+          # the actual log files directly instead.
+          echo "--- nginx health status ---"
+          docker inspect --format='{{json .State.Health}}' chronolegal-nginx 2>&1 || true
+          echo "--- nginx error.log ---"
+          docker exec chronolegal-nginx cat /var/log/nginx/error.log 2>&1 || true
+          echo "--- nginx access.log ---"
+          docker exec chronolegal-nginx cat /var/log/nginx/access.log 2>&1 || true
           docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
           docker compose -f docker-compose.yml -f docker-compose.prod.yml logs
           exit 1
