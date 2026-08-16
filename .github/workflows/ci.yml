@@ -164,3 +164,104 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ── Docker runtime smoke test ───────────────────────────────────────────────
+  # The job above only proves `docker build` succeeds — it never starts the
+  # container, so a broken CMD, a startup-time crash (e.g. a real Postgres
+  # connectivity failure in run_migrations(), which has no try/except), or
+  # missing runtime env vars would pass CI and only surface at actual deploy
+  # time. This job builds the real production image, boots it against real
+  # Postgres/Redis service containers, and waits for /health to report
+  # healthy — proving the container actually starts, migrates, and serves
+  # traffic, not just that it builds. SKIP_MODEL_WARMUP=true is required
+  # here (not part of the runtime behavior being tested, which is DB/Redis/
+  # HTTP wiring) since the embedding model isn't pre-baked into the image
+  # and lifespan blocks on warmup before serving /health.
+  docker-runtime:
+    name: Docker runtime smoke test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chronolegal
+          POSTGRES_PASSWORD: chronolegal
+          POSTGRES_DB: chronolegal_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (loaded locally)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          target: production
+          push: false
+          load: true
+          tags: chronolegal-backend:smoke-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start backend container
+        run: |
+          docker run -d --name chronolegal-backend-smoke \
+            --network host \
+            -e SECRET_KEY="ci-smoke-test-secret-key-not-for-production" \
+            -e JWT_SECRET_KEY="ci-smoke-test-secret-key-not-for-production" \
+            -e DATABASE_URL="postgresql+asyncpg://chronolegal:chronolegal@localhost:5432/chronolegal_smoke" \
+            -e REDIS_URL="redis://localhost:6379/0" \
+            -e SKIP_MODEL_WARMUP="true" \
+            chronolegal-backend:smoke-test
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Backend healthy after $((i * 2))s"
+              curl -s http://localhost:8000/health
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend never became healthy within 60s"
+          echo "--- container logs ---"
+          docker logs chronolegal-backend-smoke
+          exit 1
+
+      - name: Verify health response content
+        run: |
+          response=$(curl -sf http://localhost:8000/health)
+          echo "$response"
+          echo "$response" | grep -q '"status":"healthy"' || (echo "Unexpected health response" && exit 1)
+
+      - name: Dump container logs
+        if: always()
+        run: docker logs chronolegal-backend-smoke || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker stop chronolegal-backend-smoke || true
+          docker rm chronolegal-backend-smoke || true
