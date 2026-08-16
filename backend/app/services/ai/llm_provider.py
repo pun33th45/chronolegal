@@ -72,6 +72,22 @@ def get_llm() -> BaseChatModel:
     )
 
 
+def _extract_text(content: str | list[str | dict]) -> str:
+    """BaseMessage.content is typed str | list[str | dict] because some
+    providers (e.g. Anthropic, for multi-block or citation-bearing replies)
+    return a list of content blocks instead of plain text. Concatenate the
+    text portions so callers always get the plain string they expect."""
+    if isinstance(content, str):
+        return content
+    parts = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and isinstance(block.get("text"), str):
+            parts.append(block["text"])
+    return "".join(parts)
+
+
 async def generate_text(prompt: str, system_prompt: str | None = None) -> str:
     llm = get_llm()
     messages: list[BaseMessage] = []
@@ -81,7 +97,7 @@ async def generate_text(prompt: str, system_prompt: str | None = None) -> str:
 
     try:
         response = await llm.ainvoke(messages)
-        return response.content
+        return _extract_text(response.content)
     except Exception as e:
         logger.error(f"LLM generation failed: {e}")
         raise
@@ -100,7 +116,9 @@ async def stream_text(
     try:
         async for chunk in llm.astream(messages):
             if hasattr(chunk, "content") and chunk.content:
-                yield chunk.content
+                text = _extract_text(chunk.content)
+                if text:
+                    yield text
     except Exception as e:
         logger.error(f"LLM streaming failed: {e}")
         raise
