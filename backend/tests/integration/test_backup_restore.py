@@ -28,11 +28,21 @@ import sqlalchemy as sa
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import inspect
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import app.models  # noqa: F401 — registers all models on Base.metadata
 from app.core.config import settings
 from app.core.database import Base
+
+# DATABASE_URL, not the separate POSTGRES_HOST/PORT/USER settings fields, is
+# the actual connection target the app (and this test) uses — in CI those
+# fields still default to "postgres" (the docker-compose service name),
+# while DATABASE_URL is explicitly overridden to localhost:5432 for the
+# GH Actions Postgres service. Parsing the real target from DATABASE_URL
+# keeps pg_dump/pg_restore pointed at the same server everything else here
+# actually connects to.
+_PG_URL = make_url(settings.DATABASE_URL)
 
 pytestmark = pytest.mark.skipif(
     shutil.which("pg_dump") is None or shutil.which("pg_restore") is None,
@@ -64,18 +74,18 @@ def _db_url(name: str) -> str:
 
 def _pg_env() -> dict:
     env = os.environ.copy()
-    env["PGPASSWORD"] = settings.POSTGRES_PASSWORD
+    env["PGPASSWORD"] = _PG_URL.password or ""
     return env
 
 
 def _conn_args(db_name: str) -> list:
     return [
         "-h",
-        settings.POSTGRES_HOST,
+        _PG_URL.host,
         "-p",
-        str(settings.POSTGRES_PORT),
+        str(_PG_URL.port),
         "-U",
-        settings.POSTGRES_USER,
+        _PG_URL.username,
         "-d",
         db_name,
     ]
