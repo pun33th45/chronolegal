@@ -111,12 +111,43 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           script: |
+            set -euo pipefail
             cd /opt/chronolegal
+
+            # Previously missing: this pulled new backend/frontend IMAGES but
+            # never synced docker-compose.yml/docker-compose.prod.yml/nginx
+            # config themselves, so any change to those files (e.g. the nginx
+            # reverse-proxy rewrite, the SSL volume mount, healthcheck fixes)
+            # would never reach a real server through this pipeline, only
+            # backend/frontend source-code changes baked into the images
+            # would. .env is untracked/gitignored, so a hard reset never
+            # touches it.
+            git fetch origin main
+            git reset --hard origin/main
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull backend frontend
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps backend frontend nginx
             docker system prune -f --volumes=false
-            echo "Deployed ${{ needs.build-and-push.outputs.version }}"
+
+            # Previously missing: `up -d` returns once containers are
+            # STARTED, not once they're actually healthy — a broken image
+            # (e.g. a startup crash) would previously still report this whole
+            # job as successful. Poll nginx's own /health (plain HTTP,
+            # doesn't require the HTTPS redirect) and fail the deploy loudly
+            # if the stack never comes up healthy, so a broken release is
+            # visible as a failed GitHub Action instead of a silent outage.
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost/health | grep -q '"status":"healthy"'; then
+                echo "Deployment healthy after $((i * 2))s"
+                echo "Deployed ${{ needs.build-and-push.outputs.version }}"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Deployment did not become healthy within 60s — see logs below"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=200
+            exit 1
 
       - name: Notify deployment
         if: always()
