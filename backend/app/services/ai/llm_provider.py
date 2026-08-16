@@ -33,7 +33,7 @@ def _build_llm(
             base_url=base_url,
             temperature=temperature,
             num_predict=max_tokens,
-            timeout=timeout,
+            async_client_kwargs={"timeout": timeout},
         )
 
     if provider == "openai":
