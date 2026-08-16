@@ -167,6 +167,26 @@ export interface LegalCase {
   created_at: string
 }
 
+export interface LegalCaseSummary {
+  id: string
+  case_id: string
+  case_name: string
+  court: string | null
+  judges: string[] | null
+  judgment_date: string | null
+  acts: string[] | null
+  decision_type: string | null
+  summary: string | null
+  citation_count: number
+}
+
+export interface SimilarCaseResult {
+  case_id: string
+  case_name: string
+  court: string | null
+  similarity_score: number
+}
+
 export interface LegalEntities {
   judges: string[]
   courts: string[]

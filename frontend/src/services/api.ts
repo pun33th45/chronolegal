@@ -7,8 +7,10 @@ import type {
   ChatResponse,
   Conversation,
   LegalCase,
+  LegalCaseSummary,
   LegalEntities,
   SearchResponse,
+  SimilarCaseResult,
   SummaryResponse,
   SummaryType,
   TimelineEvent,
@@ -116,13 +118,13 @@ export const searchApi = {
 // ─── Cases ────────────────────────────────────────────────────────────────────
 export const casesApi = {
   list: (params?: Record<string, unknown>) =>
-    api.get<LegalCase[]>('/cases/', { params }).then((r) => r.data),
+    api.get<LegalCaseSummary[]>('/cases/', { params }).then((r) => r.data),
 
   get: (caseId: string) =>
     api.get<LegalCase>(`/cases/${caseId}`).then((r) => r.data),
 
   getSimilar: (caseId: string, top_k = 5) =>
-    api.get<LegalCase[]>(`/cases/${caseId}/similar`, { params: { top_k } }).then((r) => r.data),
+    api.get<SimilarCaseResult[]>(`/cases/${caseId}/similar`, { params: { top_k } }).then((r) => r.data),
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
