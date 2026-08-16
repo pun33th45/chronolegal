@@ -64,18 +64,17 @@ services:
       - chromadb_data:/chroma/chroma
     networks:
       - chronolegal-net
-    healthcheck:
-      # The prior python3/urllib CMD-SHELL check never actually passed —
-      # confirmed via CI's docker-compose-prod-smoke job: chromadb itself
-      # started and served fine, but the healthcheck kept failing, so
-      # backend (which hard-depends on chromadb: condition: service_healthy)
-      # could never start via docker-compose in any environment. Matches the
-      # curl-based pattern already used successfully by the ollama and
-      # backend healthchecks in this same file.
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
+    # No healthcheck: confirmed via CI's docker-compose-prod-smoke job that
+    # chromadb/chroma:latest is an extremely minimal Debian image (only
+    # /usr/bin/sh — no bash, curl, wget, python3, or netcat), so no in-
+    # container HTTP or TCP probe is possible without adding tooling via a
+    # custom wrapper image. Both the original python3/urllib check and a
+    # curl-based one (matching ollama/backend's pattern) failed with
+    # "executable file not found in $PATH" — chromadb itself started and
+    # served correctly both times; only the healthcheck command couldn't
+    # run at all. See the matching depends_on: condition: service_started
+    # below (chromadb isn't touched during backend's lifespan startup —
+    # app/main.py — only lazily by search endpoints at request time).
 
   # ---------------------------------------------------------------------------
   # Redis Cache
@@ -153,7 +152,7 @@ services:
       postgres:
         condition: service_healthy
       chromadb:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
     healthcheck:
