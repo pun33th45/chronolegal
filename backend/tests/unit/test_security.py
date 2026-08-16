@@ -27,10 +27,10 @@ def test_access_token_lifecycle():
     assert recovered == subject
 
 
-def test_refresh_token_lifecycle():
+async def test_refresh_token_lifecycle():
     subject = "user-id-456"
     token = create_refresh_token(subject)
-    recovered = verify_refresh_token(token)
+    recovered = await verify_refresh_token(token)
     assert recovered == subject
 
 
