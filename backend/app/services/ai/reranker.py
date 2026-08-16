@@ -5,6 +5,7 @@ Cross-encoder reranker — scores query-document pairs for precise ranking.
 import asyncio
 from functools import lru_cache
 
+import torch
 from loguru import logger
 from sentence_transformers import CrossEncoder
 
@@ -44,9 +45,21 @@ class Reranker:
         # sentence-transformers' documented CrossEncoder.predict usage is
         # exactly list[list[str]] pairs; the stub's Union is too narrow due
         # to List's invariance (mypy itself suggests Sequence instead).
+        #
+        # activation_fn=torch.sigmoid maps this model's raw, unbounded
+        # logits onto [0, 1] so the score is comparable to
+        # settings.SIMILARITY_THRESHOLD (designed for a 0-1 similarity
+        # scale elsewhere in the pipeline) — without it, a threshold of
+        # 0.6 against raw logits (roughly -11..+11 for this model) has no
+        # calibrated meaning and silently misclassifies relevant results
+        # as "insufficient context". Sigmoid is monotonic, so ranking
+        # order (top_k selection below) is unaffected.
         def _predict():
             return self.model.predict(  # type: ignore[arg-type]
-                pairs, batch_size=16, show_progress_bar=False
+                pairs,
+                batch_size=16,
+                show_progress_bar=False,
+                activation_fn=torch.sigmoid,
             )
 
         scores = await loop.run_in_executor(None, _predict)

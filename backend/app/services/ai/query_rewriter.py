@@ -2,6 +2,8 @@
 Query rewriter — expands and clarifies legal queries before retrieval.
 """
 
+import hashlib
+
 from app.core.redis import cache
 from app.services.ai.llm_provider import generate_text
 
@@ -24,7 +26,11 @@ REWRITE_PROMPT = (
 
 
 async def rewrite_query(query: str) -> str:
-    cache_key = f"query_rewrite:{hash(query)}"
+    # hashlib (stable across processes) instead of the builtin hash()
+    # (per-process-randomized by PYTHONHASHSEED since Python 3.3) — with
+    # unstable keys, a cache entry written by one worker is never found by
+    # another, silently defeating this cache under any multi-worker deploy.
+    cache_key = f"query_rewrite:{hashlib.md5(query.encode()).hexdigest()}"
     cached = await cache.get(cache_key)
     if cached:
         return cached

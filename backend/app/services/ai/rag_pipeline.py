@@ -337,10 +337,18 @@ class RAGPipeline:
 
     @staticmethod
     def _strip_invalid_citations(answer: str, num_docs: int) -> str:
-        """Remove [N] inline citations where N is outside [1, num_docs]."""
+        """Remove [N] inline citations where N is outside [1, num_docs].
+
+        Only brackets containing short (<=2 digit) numbers are treated as
+        citation markers — real legal citations like "[1994] 3 SCR 1" use
+        4-digit years in brackets and must be left untouched, not deleted
+        as an "invalid" citation index.
+        """
 
         def _replace(m: re.Match) -> str:
             nums = [n.strip() for n in m.group(1).split(",")]
+            if any(n.isdigit() and len(n) > 2 for n in nums):
+                return m.group(0)
             valid = [n for n in nums if n.isdigit() and 1 <= int(n) <= num_docs]
             return f"[{','.join(valid)}]" if valid else ""
 

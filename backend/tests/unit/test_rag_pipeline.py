@@ -118,3 +118,34 @@ async def test_rag_stream_yields_chunks():
         text_chunks = [c for c in chunks if c.type == "text"]
         assert len(text_chunks) > 0
         assert "".join(c.content for c in text_chunks) == "Article 21 text."
+
+
+def test_strip_invalid_citations_preserves_legal_citation_years():
+    """[1994] 3 SCR 1 is a real Indian Supreme Court Reports citation, not
+    an out-of-range [N] marker — must be left untouched, not deleted."""
+    from app.services.ai.rag_pipeline import RAGPipeline
+
+    answer = "The Court in [1994] 3 SCR 1 held that liberty is paramount."
+    result = RAGPipeline._strip_invalid_citations(answer, num_docs=3)
+
+    assert "[1994] 3 SCR 1" in result
+
+
+def test_strip_invalid_citations_removes_out_of_range_markers():
+    from app.services.ai.rag_pipeline import RAGPipeline
+
+    answer = "This is supported by the evidence [1] and also [7]."
+    result = RAGPipeline._strip_invalid_citations(answer, num_docs=3)
+
+    assert "[1]" in result
+    assert "[7]" not in result
+
+
+def test_strip_invalid_citations_keeps_valid_markers_in_range():
+    from app.services.ai.rag_pipeline import RAGPipeline
+
+    answer = "Established in [1,2] and [3]."
+    result = RAGPipeline._strip_invalid_citations(answer, num_docs=3)
+
+    assert "[1,2]" in result
+    assert "[3]" in result

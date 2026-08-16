@@ -158,31 +158,42 @@ class EmbeddingService:
                 case_svc = CaseService(db)
                 cases = await case_svc.get_unembedded(limit=10000)
                 total = len(cases)
+                failed = 0
                 for i, case in enumerate(cases):
-                    await self._embed_case(case)
+                    try:
+                        chunk_count = await self._embed_case(case)
+                        case.is_embedded = True
+                        case.chunk_count = chunk_count
+                        await db.commit()
+                    except Exception as exc:
+                        failed += 1
+                        logger.warning(f"Reindex: case {case.case_id} failed: {exc}")
+                        await db.rollback()
                     progress = int((i + 1) / total * 100)
                     await cache.set(
                         f"reindex:{task_id}",
-                        {"status": "running", "progress": progress},
+                        {"status": "running", "progress": progress, "failed": failed},
                         ttl=3600,
                     )
             await cache.set(
-                f"reindex:{task_id}", {"status": "done", "progress": 100}, ttl=3600
+                f"reindex:{task_id}",
+                {"status": "done", "progress": 100, "failed": failed},
+                ttl=3600,
             )
-            logger.info(f"Full reindex completed: task_id={task_id}")
+            logger.info(f"Full reindex completed: task_id={task_id}, failed={failed}")
         except Exception as e:
             logger.error(f"Reindex failed: {e}")
             await cache.set(
                 f"reindex:{task_id}", {"status": "failed", "error": str(e)}, ttl=3600
             )
 
-    async def _embed_case(self, case: Any) -> None:
+    async def _embed_case(self, case: Any) -> int:
         from app.services.ai.chunker import TextChunker
 
         chunker = TextChunker()
         chunks = chunker.chunk(case.full_text or "")
         if not chunks:
-            return
+            return 0
 
         ids = [f"{case.case_id}__chunk_{i}" for i in range(len(chunks))]
         metadatas = [
@@ -196,3 +207,4 @@ class EmbeddingService:
             for i in range(len(chunks))
         ]
         await self.upsert_chunks(chunks, metadatas, ids)
+        return len(chunks)
