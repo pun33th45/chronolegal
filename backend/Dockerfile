@@ -39,8 +39,16 @@ FROM base AS production
 
 COPY . .
 
+# /var/log/chronolegal: app/core/logging.py creates this and writes a
+# rotating file sink to it whenever APP_ENV=production. Confirmed via CI's
+# docker-compose-prod-smoke job that without this, the non-root `appuser`
+# below hits PermissionError on that mkdir and the backend crashes at
+# startup — this bug was latent until this session's build.target fix made
+# "production" invocations actually use this stage (and therefore appuser)
+# for the first time.
 RUN adduser --disabled-password --gecos "" appuser && \
-    chown -R appuser:appuser /app
+    mkdir -p /var/log/chronolegal && \
+    chown -R appuser:appuser /app /var/log/chronolegal
 USER appuser
 
 EXPOSE 8000
