@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from app.core.security import (
     deny_refresh_token,
     verify_refresh_token,
 )
+from app.middleware.rate_limit import limiter
 from app.models.user import User
 from app.schemas.user import (
     ChangePasswordRequest,
@@ -58,7 +59,10 @@ async def get_current_admin(
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(
+    request: Request, payload: UserCreate, db: AsyncSession = Depends(get_db)
+):
     svc = UserService(db)
     existing = await svc.get_by_email(payload.email)
     if existing:
@@ -77,7 +81,10 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(
+    request: Request, payload: UserLogin, db: AsyncSession = Depends(get_db)
+):
     svc = UserService(db)
     user = await svc.authenticate(payload.email, payload.password)
     if not user:
@@ -97,7 +104,9 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login/form", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login_form(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
@@ -120,8 +129,11 @@ async def login_form(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("20/minute")
 async def refresh_token(
-    payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    payload: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         user_id = await verify_refresh_token(payload.refresh_token)

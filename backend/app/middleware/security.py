@@ -23,6 +23,13 @@ _SQL_PATTERNS = [
 ]
 _SQL_RE = re.compile("|".join(_SQL_PATTERNS), re.IGNORECASE)
 
+# Legitimate JSON/form API payloads for this app are always small; only file
+# uploads are large. Scanning (and fully buffering + UTF-8 decoding) a
+# multi-hundred-MB upload body on every request is an unbounded-memory DoS
+# vector with no offsetting benefit — binary file bytes were never a
+# meaningful target for this text-pattern scan anyway.
+_MAX_SCAN_BYTES = 65_536
+
 
 def sanitize_string(value: str) -> str:
     """Strip HTML tags and encode dangerous characters."""
@@ -33,17 +40,27 @@ def sanitize_string(value: str) -> str:
 class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method in ("POST", "PUT", "PATCH"):
-            try:
-                body = await request.body()
-                if body:
-                    body_str = body.decode("utf-8", errors="replace")
-                    if _INJECTION_RE.search(body_str):
-                        return JSONResponse(
-                            status_code=400,
-                            content={"detail": "Request contains disallowed content"},
-                        )
-            except Exception:
-                pass
+            content_type = request.headers.get("content-type", "")
+            content_length = request.headers.get("content-length")
+            is_small_enough = (
+                content_length is not None
+                and content_length.isdigit()
+                and int(content_length) <= _MAX_SCAN_BYTES
+            )
+            if "multipart/form-data" not in content_type and is_small_enough:
+                try:
+                    body = await request.body()
+                    if body:
+                        body_str = body.decode("utf-8", errors="replace")
+                        if _INJECTION_RE.search(body_str):
+                            return JSONResponse(
+                                status_code=400,
+                                content={
+                                    "detail": "Request contains disallowed content"
+                                },
+                            )
+                except Exception:
+                    pass
 
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
