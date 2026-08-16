@@ -5,6 +5,8 @@ against a live PostgreSQL database (see tests/conftest.py). CaseService,
 AnalyticsService, and LegalCase are used directly — nothing is mocked.
 """
 
+from datetime import date
+
 import pytest
 
 from app.models.case import LegalCase
@@ -106,3 +108,31 @@ async def test_array_null_and_empty_behavior(db):
     analytics_svc = AnalyticsService(db)
     top_acts = await analytics_svc.get_top_acts()
     assert [(i.name, i.count) for i in top_acts] == [("Z", 1)]
+
+
+@pytest.mark.asyncio
+async def test_get_case_trends_buckets_by_year_and_respects_cutoff(db):
+    """get_case_trends' raw SQL uses EXTRACT(YEAR FROM judgment_date) and a
+    NOW()-based year cutoff — both Postgres-specific and easy to get
+    subtly wrong (off-by-one on the cutoff, NULL dates leaking into a
+    bucket). This is the only test that actually exercises it against a
+    real database rather than mocking the ORM call."""
+    current_year = date.today().year
+    db.add_all(
+        [
+            _case("trend-this-year-a", judgment_date=date(current_year, 1, 15)),
+            _case("trend-this-year-b", judgment_date=date(current_year, 6, 1)),
+            _case("trend-last-year", judgment_date=date(current_year - 1, 3, 1)),
+            _case("trend-too-old", judgment_date=date(current_year - 5, 1, 1)),
+            _case("trend-null-date", judgment_date=None),
+        ]
+    )
+    await db.commit()
+
+    svc = AnalyticsService(db)
+    trends = await svc.get_case_trends(years=2)
+
+    by_year = {t.year: t.count for t in trends}
+    assert by_year.get(current_year) == 2
+    assert by_year.get(current_year - 1) == 1
+    assert (current_year - 5) not in by_year
