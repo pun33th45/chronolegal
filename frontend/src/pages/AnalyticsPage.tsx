@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   Cell,
-  Legend,
   Line,
   LineChart,
   Pie,
@@ -197,7 +196,7 @@ export default function AnalyticsPage() {
       <div className="glass rounded-xl p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Top Legal Keywords</h3>
         <div className="flex flex-wrap gap-2">
-          {data.top_keywords.map((kw, i) => {
+          {data.top_keywords.map((kw) => {
             const size = Math.max(0.7, Math.min(1.4, kw.count / (data.top_keywords[0]?.count || 1) * 1.4))
             return (
               <span

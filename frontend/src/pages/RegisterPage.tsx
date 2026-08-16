@@ -27,8 +27,9 @@ export default function RegisterPage() {
       setTokens(data.access_token, data.refresh_token, data.user)
       toast.success('Account created! Welcome to ChronoLegal.')
       navigate('/dashboard')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Registration failed')
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail || 'Registration failed')
     } finally {
       setLoading(false)
     }

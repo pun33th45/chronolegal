@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -19,7 +19,7 @@ import {
 import { chatApi, feedbackApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/utils/cn'
-import type { Citation, Conversation, Message } from '@/types'
+import type { Citation, Message } from '@/types'
 
 const SUGGESTED = [
   'Explain Article 21 of the Indian Constitution.',
@@ -56,7 +56,7 @@ export default function ChatPage() {
     enabled: !!activeConvId,
   })
 
-  const messages = activeConv?.messages || []
+  const messages = useMemo(() => activeConv?.messages || [], [activeConv])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function ChatPage() {
       setInput(q)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [searchParams])
+  }, [searchParams, activeConvId])
 
   async function sendMessage() {
     if (!input.trim() || isStreaming) return
@@ -119,7 +119,9 @@ export default function ChatPage() {
             } else if (chunk.type === 'done') {
               if (chunk.conversation_id) convId = chunk.conversation_id
             }
-          } catch {}
+          } catch {
+            // Ignore malformed SSE lines
+          }
         }
       }
 

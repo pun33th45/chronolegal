@@ -1,20 +1,16 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-  BookOpen,
   Calendar,
-  ChevronDown,
   Clock,
-  Download,
   FileText,
   Gavel,
   List,
   Loader2,
   Scale,
   Tag,
-  Users,
 } from 'lucide-react'
 import { casesApi, summaryApi, nerApi, timelineApi } from '@/services/api'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -27,9 +23,11 @@ const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
   { value: 'bullet', label: 'Bullet Points' },
 ]
 
+type ViewerTab = 'judgment' | 'entities' | 'timeline' | 'summary'
+
 export default function CaseViewerPage() {
   const { caseId } = useParams<{ caseId: string }>()
-  const [activeTab, setActiveTab] = useState<'judgment' | 'entities' | 'timeline' | 'summary'>('judgment')
+  const [activeTab, setActiveTab] = useState<ViewerTab>('judgment')
   const [summaryType, setSummaryType] = useState<SummaryType>('concise')
 
   const { data: caseData, isLoading } = useQuery({
@@ -134,7 +132,7 @@ export default function CaseViewerPage() {
             <button
               key={tab.id}
               onClick={() => {
-                setActiveTab(tab.id as any)
+                setActiveTab(tab.id as ViewerTab)
                 if (tab.id === 'entities' && !nerMutation.data) nerMutation.mutate()
               }}
               className={cn(
@@ -344,7 +342,7 @@ export default function CaseViewerPage() {
         {similar && similar.length > 0 && (
           <div className="glass rounded-xl p-4 space-y-3">
             <h3 className="font-semibold text-foreground text-sm">Similar Cases</h3>
-            {similar.slice(0, 5).map((c: any) => (
+            {similar.slice(0, 5).map((c) => (
               <a
                 key={c.case_id}
                 href={`/cases/${c.case_id}`}

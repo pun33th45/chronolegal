@@ -1,6 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { User } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
 export default function ProfilePage() {

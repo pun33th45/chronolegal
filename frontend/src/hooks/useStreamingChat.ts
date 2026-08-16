@@ -89,13 +89,13 @@ export function useStreamingChat() {
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error ?? 'Unknown stream error')
               }
-            } catch (parseErr) {
+            } catch {
               // Ignore malformed SSE lines
             }
           }
         }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
           setState((s) => ({ ...s, isStreaming: false, error: err.message }))
         }
       }

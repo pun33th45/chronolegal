@@ -18,8 +18,9 @@ export default function SettingsPage() {
       toast.success('Password changed successfully')
       setPasswords({ current: '', new: '', confirm: '' })
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.detail || 'Password change failed')
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail || 'Password change failed')
     },
   })
 

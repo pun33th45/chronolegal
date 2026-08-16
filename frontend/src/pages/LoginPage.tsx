@@ -21,8 +21,9 @@ export default function LoginPage() {
       setTokens(data.access_token, data.refresh_token, data.user)
       toast.success('Welcome back!')
       navigate('/dashboard')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Login failed')
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail || 'Login failed')
     } finally {
       setLoading(false)
     }

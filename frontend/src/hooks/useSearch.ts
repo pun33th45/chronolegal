@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { searchApi } from '@/services/api'
 import { useDebounce } from './useDebounce'
-import type { SearchFilters, SearchResponse } from '@/types'
+import type { SearchFilters } from '@/types'
 
 interface UseSearchOptions {
   searchType?: string

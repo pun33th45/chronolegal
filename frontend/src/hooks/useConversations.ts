@@ -43,5 +43,10 @@ export function useConversations() {
     [deleteMutation],
   )
 
-  return { conversations, isLoading, rename, remove }
+  const archive = useCallback(
+    (id: string) => archiveMutation.mutate(id),
+    [archiveMutation],
+  )
+
+  return { conversations, isLoading, rename, remove, archive }
 }
