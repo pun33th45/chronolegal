@@ -65,7 +65,14 @@ services:
     networks:
       - chronolegal-net
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat')\""]
+      # The prior python3/urllib CMD-SHELL check never actually passed —
+      # confirmed via CI's docker-compose-prod-smoke job: chromadb itself
+      # started and served fine, but the healthcheck kept failing, so
+      # backend (which hard-depends on chromadb: condition: service_healthy)
+      # could never start via docker-compose in any environment. Matches the
+      # curl-based pattern already used successfully by the ollama and
+      # backend healthchecks in this same file.
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
       interval: 15s
       timeout: 10s
       retries: 5

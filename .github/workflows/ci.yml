@@ -223,9 +223,17 @@ jobs:
 
       # `nginx -t` validates the actual config this session rewrote (the new
       # upstream frontend block + proxy_pass in default.conf) against a real
-      # nginx binary, rather than relying on it merely "looking right".
+      # nginx binary, rather than relying on it merely "looking right". nginx
+      # resolves upstream server hostnames at config-load time even for `-t`,
+      # so `backend`/`frontend` (only real inside the compose network) need
+      # --add-host stand-ins here purely so the names resolve — nothing needs
+      # to actually be listening for a syntax/config validation pass.
       - name: Validate nginx configuration syntax
-        run: docker run --rm chronolegal-nginx:build-check nginx -t
+        run: |
+          docker run --rm \
+            --add-host=backend:127.0.0.1 \
+            --add-host=frontend:127.0.0.1 \
+            chronolegal-nginx:build-check nginx -t
 
   # ── Docker runtime smoke test ───────────────────────────────────────────────
   # The job above only proves `docker build` succeeds — it never starts the
