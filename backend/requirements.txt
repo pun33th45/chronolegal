@@ -28,6 +28,7 @@ aioredis==2.0.1
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # passlib 1.7.4 predates bcrypt>=4.1's removal of bcrypt.__about__
 python-multipart==0.0.18
 cryptography==43.0.3
 
