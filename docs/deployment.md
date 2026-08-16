@@ -164,7 +164,7 @@ docker compose exec nginx nginx -s reload
 ```bash
 make prod
 # OR
-docker compose --profile production up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
 ```
 
 ---

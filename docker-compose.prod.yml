@@ -1,0 +1,13 @@
+# Production overlay — explicitly declares APP_ENV=production so the
+# backend's insecure-default secret validation always runs, regardless of
+# what a stray docker-compose.override.yml or an unedited .env file says.
+#
+# Must be applied together with docker-compose.yml via explicit -f flags
+# (e.g. `docker compose -f docker-compose.yml -f docker-compose.prod.yml ...`).
+# Passing explicit -f files disables Compose's automatic docker-compose.override.yml
+# discovery, so the development-only APP_ENV=development override never applies here.
+
+services:
+  backend:
+    environment:
+      APP_ENV: production

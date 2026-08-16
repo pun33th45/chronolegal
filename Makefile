@@ -31,7 +31,7 @@ dev:
 	@echo "→ API Docs: http://localhost:8000/api/docs"
 
 prod:
-	docker compose --profile production up --build -d
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up --build -d
 
 down:
 	docker compose down
