@@ -8,6 +8,17 @@ from app.core.config import settings
 from app.core.database import Base, get_db
 from app.main import app
 
+# Auth-endpoint rate limiting (5-20/minute per IP) is real production
+# behavior we want covered by tests, not bypassed by mocking it away — but
+# many independent test functions each call /auth/login via auth_headers
+# below, all sharing one client "IP" through the ASGI test transport, so
+# the limit would otherwise trip within the first handful of tests in a
+# session and cascade into unrelated 401s. Disabling the shared Limiter
+# singleton for the test process (not touching the app's route
+# decorators/wiring at all) is slowapi's documented way to exempt tests
+# from limits that are still fully exercised by real traffic.
+app.state.limiter.enabled = False
+
 # Real PostgreSQL, same dialect as production — read from the same
 # configuration/environment the app itself uses (CI already provides
 # DATABASE_URL pointing at its postgres service; local runs fall back to
