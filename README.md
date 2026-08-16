@@ -189,7 +189,7 @@ chronolegal/
 │   ├── data/                    # Dataset pipeline
 │   └── setup/                   # Admin creation, model pull
 ├── database/migrations/         # SQL migrations
-├── docker/nginx/                # Nginx config
+├── nginx/                       # Nginx config + Dockerfile
 ├── docker-compose.yml
 ├── Makefile
 └── .env.example

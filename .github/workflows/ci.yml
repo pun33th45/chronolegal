@@ -83,7 +83,6 @@ jobs:
           SECRET_KEY: "ci-test-secret-key-not-for-production"
           JWT_SECRET_KEY: ci-test-secret-key-not-for-production
           LLM_PROVIDER: ollama
-          ENVIRONMENT: test
         run: |
           pytest tests/ -v --tb=short --cov=app --cov-report=xml --cov-report=term-missing
 

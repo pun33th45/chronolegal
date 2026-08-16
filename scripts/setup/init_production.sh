@@ -36,5 +36,5 @@ fi
 echo "✅ Production init complete."
 echo ""
 echo "  Platform: http://localhost"
-echo "  API docs: http://localhost/api/v1/docs"
 echo "  Admin:    http://localhost/admin"
+echo "  (API docs are disabled under APP_ENV=production — see backend/app/main.py)"

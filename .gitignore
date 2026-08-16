@@ -35,6 +35,7 @@ frontend/.vite/
 
 # Docker
 *.log
+nginx/ssl/
 
 # Data
 /data/

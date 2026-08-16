@@ -83,10 +83,20 @@ LLM_MODEL=llama3.1:8b
 # OPENAI_API_KEY=sk-...
 
 # === Environment ===
-ENVIRONMENT=production
+APP_ENV=production
 DEBUG=false
 LOG_LEVEL=INFO
 ```
+
+`APP_ENV` (not `ENVIRONMENT`) is the setting the backend actually reads
+(`backend/app/core/config.py`). It gates two things: the insecure-default-secret
+validator that refuses to boot with placeholder `SECRET_KEY`/`JWT_SECRET_KEY`/
+`POSTGRES_PASSWORD`/`REDIS_PASSWORD` values, and whether `/api/docs`,
+`/api/redoc`, `/api/openapi.json` are exposed at all (only in non-production).
+Getting the variable name wrong means both silently do nothing (the config
+model ignores unknown keys) — the container boots with `APP_ENV=development`
+regardless of what you set `ENVIRONMENT` to, insecure defaults are accepted,
+and the API docs stay exposed.
 
 ---
 
@@ -110,24 +120,34 @@ This script:
 
 ## 4. SSL Certificate Setup
 
+`nginx/default.conf` expects real certs at `/etc/nginx/ssl/fullchain.pem` and
+`/etc/nginx/ssl/privkey.pem` inside the container, mounted read-only from
+`./nginx/ssl` on the host (see the `nginx` service's volumes in
+`docker-compose.yml`). `nginx/Dockerfile` bakes in a self-signed placeholder
+at that same path purely so the image works out of the box in local dev —
+the volume mount below shadows it, so **populate `nginx/ssl/` before
+starting the `nginx` service**, or it will boot with the placeholder (or,
+once the mount is in place, fail to start if `nginx/ssl/` is empty).
+
 ### Option A — Let's Encrypt (recommended for public servers)
 
 ```bash
 # Install certbot
 sudo apt install certbot -y
 
-# Stop nginx temporarily
+# Stop nginx temporarily (no-op if it isn't running yet)
 docker compose stop nginx
 
 # Issue certificate
 sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com
 
-# Copy certs to nginx volume
-sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem docker/ssl/cert.pem
-sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem docker/ssl/key.pem
+# Copy certs into the volume nginx actually mounts
+mkdir -p nginx/ssl
+sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem nginx/ssl/fullchain.pem
+sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem nginx/ssl/privkey.pem
 
-# Restart nginx
-docker compose start nginx
+# Start/restart nginx
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d nginx
 
 # Auto-renewal (add to cron)
 echo "0 3 * * * certbot renew --quiet && docker compose restart nginx" | sudo crontab -
@@ -136,9 +156,10 @@ echo "0 3 * * * certbot renew --quiet && docker compose restart nginx" | sudo cr
 ### Option B — Self-signed (internal/staging only)
 
 ```bash
+mkdir -p nginx/ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout docker/ssl/key.pem \
-  -out docker/ssl/cert.pem \
+  -keyout nginx/ssl/privkey.pem \
+  -out nginx/ssl/fullchain.pem \
   -subj "/CN=yourdomain.com"
 ```
 
@@ -175,12 +196,18 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile produc
 # All services healthy?
 docker compose ps
 
-# Backend health endpoint
-curl https://yourdomain.com/api/health
+# Backend health endpoint (proxied by nginx at /health, not /api/health)
+curl https://yourdomain.com/health
 
 # Expected
-# {"status":"healthy","version":"1.0.0","db":"connected","chroma":"connected","redis":"connected"}
+# {"status":"healthy","app":"ChronoLegal","version":"1.0.0","environment":"production"}
 ```
+
+Note: `/health` is a liveness check only — it confirms the backend process is
+up and responding, not that Postgres/Redis/ChromaDB are reachable. A "healthy"
+response does not by itself prove the database or cache are connected; check
+`docker compose ps` (service healthchecks) and `docker compose logs backend`
+for that.
 
 Open in browser: `https://yourdomain.com`
 
