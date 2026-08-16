@@ -436,53 +436,61 @@ jobs:
 
       - name: Verify frontend is served through nginx
         run: |
-          response=$(curl -sf http://localhost/)
+          # Plain HTTP correctly 301s to HTTPS for everything except /health
+          # (see nginx/default.conf) — follow it with -L, and -k since this
+          # is our own throwaway self-signed cert, not a public CA one.
+          response=$(curl -skfL https://localhost/)
           echo "$response" | grep -qi '<div id="root">' \
             || (echo "nginx did not proxy the frontend SPA correctly" && exit 1)
 
       - name: Auth smoke test through nginx (register, login, authenticated request, unauthorized/invalid rejection, refresh, logout revocation)
         run: |
           set -e
-          BASE=http://localhost/api/v1
+          # https, not http: /api/ only exists in the HTTPS server block —
+          # plain HTTP 301-redirects everything except /health there, and
+          # curl -L on a redirected POST degrades it to GET, silently
+          # dropping the request body. -k because this is our own
+          # throwaway self-signed cert, not a public CA one.
+          BASE=https://localhost/api/v1
           EMAIL=ci-smoke@chronolegal.test
           PASSWORD=CiSmokeTest123
 
-          curl -sf -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "$(jq -n \
+          curl -skf -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "$(jq -n \
             --arg email "$EMAIL" --arg pw "$PASSWORD" \
             '{email:$email, username:"ci_smoke_user", full_name:"CI Smoke Test", password:$pw}')" \
             | jq .
 
-          login=$(curl -sf -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "$(jq -n \
+          login=$(curl -skf -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "$(jq -n \
             --arg email "$EMAIL" --arg pw "$PASSWORD" '{email:$email, password:$pw}')")
           access_token=$(echo "$login" | jq -r .access_token)
           refresh_token=$(echo "$login" | jq -r .refresh_token)
           [ -n "$access_token" ] && [ "$access_token" != "null" ] || (echo "No access token returned" && exit 1)
           [ -n "$refresh_token" ] && [ "$refresh_token" != "null" ] || (echo "No refresh token returned" && exit 1)
 
-          me=$(curl -sf "$BASE/auth/me" -H "Authorization: Bearer $access_token")
+          me=$(curl -skf "$BASE/auth/me" -H "Authorization: Bearer $access_token")
           echo "$me" | jq -e ".email == \"$EMAIL\"" > /dev/null \
             || (echo "Authenticated /auth/me did not return the expected user" && exit 1)
 
-          unauth_status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/auth/me")
+          unauth_status=$(curl -sk -o /dev/null -w "%{http_code}" "$BASE/auth/me")
           [ "$unauth_status" = "401" ] || (echo "Expected 401 without a token, got $unauth_status" && exit 1)
 
-          invalid_status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/auth/me" -H "Authorization: Bearer not-a-real-token")
+          invalid_status=$(curl -sk -o /dev/null -w "%{http_code}" "$BASE/auth/me" -H "Authorization: Bearer not-a-real-token")
           [ "$invalid_status" = "401" ] || (echo "Expected 401 for an invalid token, got $invalid_status" && exit 1)
 
-          refresh=$(curl -sf -X POST "$BASE/auth/refresh" -H "Content-Type: application/json" \
+          refresh=$(curl -skf -X POST "$BASE/auth/refresh" -H "Content-Type: application/json" \
             -d "$(jq -n --arg rt "$refresh_token" '{refresh_token:$rt}')")
           new_refresh_token=$(echo "$refresh" | jq -r .refresh_token)
           [ -n "$(echo "$refresh" | jq -r .access_token)" ] || (echo "Refresh did not return a new access token" && exit 1)
 
           # Old refresh token was rotated out by the call above — it must now be rejected.
-          reuse_status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
+          reuse_status=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
             -H "Content-Type: application/json" -d "$(jq -n --arg rt "$refresh_token" '{refresh_token:$rt}')")
           [ "$reuse_status" = "401" ] || (echo "Rotated-out refresh token was not rejected (got $reuse_status)" && exit 1)
 
-          curl -sf -o /dev/null -w "%{http_code}\n" -X POST "$BASE/auth/logout" -H "Content-Type: application/json" \
+          curl -skf -o /dev/null -w "%{http_code}\n" -X POST "$BASE/auth/logout" -H "Content-Type: application/json" \
             -d "$(jq -n --arg rt "$new_refresh_token" '{refresh_token:$rt}')"
 
-          loggedout_status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
+          loggedout_status=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
             -H "Content-Type: application/json" -d "$(jq -n --arg rt "$new_refresh_token" '{refresh_token:$rt}')")
           [ "$loggedout_status" = "401" ] || (echo "Refresh token was still valid after logout (got $loggedout_status)" && exit 1)
 
@@ -491,16 +499,16 @@ jobs:
       - name: Verify refresh-token revocation fails CLOSED when Redis is down
         run: |
           set -e
-          BASE=http://localhost/api/v1
+          BASE=https://localhost/api/v1
 
-          login=$(curl -sf -X POST "$BASE/auth/login" -H "Content-Type: application/json" \
+          login=$(curl -skf -X POST "$BASE/auth/login" -H "Content-Type: application/json" \
             -d '{"email": "ci-smoke@chronolegal.test", "password": "CiSmokeTest123"}')
           refresh_token=$(echo "$login" | jq -r .refresh_token)
 
           docker compose -f docker-compose.yml -f docker-compose.prod.yml stop redis
           sleep 2
 
-          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
+          status=$(curl -sk -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
             -H "Content-Type: application/json" -d "$(jq -n --arg rt "$refresh_token" '{refresh_token:$rt}')")
           echo "refresh status with Redis down: $status"
           [ "$status" = "401" ] || (echo "Refresh verification did not fail closed with Redis unreachable (got $status, expected 401)" && exit 1)
