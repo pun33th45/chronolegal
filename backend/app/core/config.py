@@ -180,6 +180,30 @@ class Settings(BaseSettings):
                 f"Production startup blocked — insecure default values detected for: "
                 f"{', '.join(insecure)}. Update these in your .env file."
             )
+
+        # CORSMiddleware reflects the request's actual Origin back (rather than
+        # a literal "*") whenever allow_credentials=True, so this combination
+        # isn't "insecure but functional" like a default secret — it's "any
+        # site on the internet, with credentials". Block it outright.
+        if "*" in self.cors_origins_list and self.CORS_ALLOW_CREDENTIALS:
+            raise ValueError(
+                'Production startup blocked — CORS_ORIGINS="*" combined with '
+                "CORS_ALLOW_CREDENTIALS=true allows credentialed requests from "
+                "any origin. Set CORS_ORIGINS to the exact production domain(s)."
+            )
+
+        # DEBUG isn't a secret so it isn't in _DEFAULT_SECRETS, but it isn't
+        # cosmetic either: it enables SQL echo (database.py) and loguru
+        # diagnose/backtrace (logging.py), both of which can write request
+        # data and local variable values (potentially including PII or
+        # hashed credentials) into server-side logs.
+        if self.DEBUG:
+            raise ValueError(
+                "Production startup blocked — DEBUG=true enables SQL statement "
+                "echo and verbose exception logging, both of which can write "
+                "sensitive data to server logs. Set DEBUG=false in production."
+            )
+
         return self
 
     @property

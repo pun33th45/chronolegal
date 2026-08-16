@@ -85,7 +85,16 @@ async def deny_refresh_token(token: str) -> None:
 
 
 async def verify_refresh_token(token: str) -> str:
-    """Verify a refresh token; raise ValueError if it's on the denylist."""
+    """Verify a refresh token; raise ValueError if it's on the denylist.
+
+    The denylist check fails CLOSED: CacheService.exists() fails open
+    (returns False on any Redis error), which is fine for ordinary caching
+    but wrong here — a Redis outage must not be silently treated as "this
+    token was never revoked", or every rotated-out/logged-out refresh
+    token becomes valid again for the outage's duration. exists_strict()
+    propagates the error instead, and it's turned into a rejected refresh
+    below rather than a 500.
+    """
     payload = decode_token(token)
     if payload.get("type") != "refresh":
         raise ValueError("Not a refresh token")
@@ -97,7 +106,11 @@ async def verify_refresh_token(token: str) -> str:
     if jti:
         from app.core.redis import cache
 
-        if await cache.exists(f"{_DENYLIST_PREFIX}:{jti}"):
+        try:
+            denied = await cache.exists_strict(f"{_DENYLIST_PREFIX}:{jti}")
+        except Exception as e:
+            raise ValueError("Refresh token verification unavailable") from e
+        if denied:
             raise ValueError("Refresh token has been revoked")
 
     return sub

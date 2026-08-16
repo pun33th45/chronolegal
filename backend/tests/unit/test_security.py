@@ -44,3 +44,19 @@ def test_access_token_rejects_refresh():
 def test_invalid_token_raises():
     with pytest.raises(ValueError):
         verify_access_token("not.a.valid.token")
+
+
+async def test_refresh_token_verification_fails_closed_on_cache_error(monkeypatch):
+    """The denylist check must fail CLOSED: if Redis can't be reached, a
+    revoked/rotated-out refresh token must not be silently accepted just
+    because the revocation check itself couldn't run."""
+    from app.core.redis import cache
+
+    async def _broken_exists_strict(key: str) -> bool:
+        raise ConnectionError("redis unreachable")
+
+    monkeypatch.setattr(cache, "exists_strict", _broken_exists_strict)
+
+    token = create_refresh_token("user-id-999")
+    with pytest.raises(ValueError, match="verification unavailable"):
+        await verify_refresh_token(token)

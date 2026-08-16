@@ -82,6 +82,14 @@ class CacheService:
         except Exception:
             return False
 
+    async def exists_strict(self, key: str) -> bool:
+        """Like exists(), but propagates Redis errors instead of failing
+        open. Use only for security-critical checks (e.g. token
+        revocation) where an unreachable cache must not be silently
+        treated as "not found"."""
+        client = await get_redis()
+        return bool(await client.exists(self._key(key)))
+
     async def increment(self, key: str, ttl: int | None = None) -> int:
         client = await get_redis()
         pipe = client.pipeline()
