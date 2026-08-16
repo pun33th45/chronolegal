@@ -279,26 +279,116 @@ curl http://localhost:8001/api/v1/collections/legal_cases | python3 -m json.tool
 
 ---
 
-## Backup Strategy
+## Backup & Restore
 
-### Database Backup
+`scripts/backup/backup_db.sh` and `scripts/backup/restore_db.sh` wrap
+PostgreSQL's own `pg_dump`/`pg_restore` (custom format, `-Fc` — compressed,
+supports selective/parallel restore) via `docker compose exec postgres`, so
+no extra tooling is required on the host or in any application image; the
+`postgres:16-alpine` image already ships both binaries. This is a genuine,
+tested capability — see `backend/tests/integration/test_backup_restore.py`
+(full pg_dump → pg_restore round trip against disposable databases, verifying
+both schema and data survive) and `backend/tests/unit/test_backup_retention.py`
+(retention edge cases: zero/one/multiple backups, and the guarantee that the
+newest backup is never deleted).
+
+### Creating a backup
 ```bash
-# Full backup
-docker compose exec postgres pg_dump -U chronolegal chronolegal_prod \
-  > backups/chronolegal_$(date +%Y%m%d_%H%M%S).sql
+make backup
+# or directly:
+set -a; source .env; set +a
+bash scripts/backup/backup_db.sh
+```
+Writes a timestamped `.dump` file to `./backups` (override with
+`BACKUP_DIR=/path make backup`), refusing to leave a partial file behind if
+`pg_dump` fails or produces empty output. Retention defaults to 14 days
+(`BACKUP_RETENTION_DAYS=0` disables pruning); the single most recent backup
+is never deleted, even if every backup is older than the retention window.
 
-# Automated daily backup (add to cron)
-0 2 * * * docker compose -f /path/to/chronolegal/docker-compose.yml \
-  exec -T postgres pg_dump -U chronolegal chronolegal_prod \
-  > /backups/chronolegal_$(date +\%Y\%m\%d).sql
+### Listing backups
+```bash
+ls -lh backups/
 ```
 
-### ChromaDB Backup
-ChromaDB persists data to `chroma_data` Docker volume:
+### Restoring a backup
+**Never restore over the live production database to "test" a backup.**
+Always verify a backup by restoring into a fresh, disposable database name
+first:
 ```bash
-docker run --rm -v chronolegal_chroma_data:/data -v $(pwd)/backups:/backup \
-  alpine tar czf /backup/chroma_$(date +%Y%m%d).tar.gz /data
+make restore BACKUP=backups/chronolegal_20260101T020000Z.dump DB=chronolegal_restore_check
 ```
+`restore_db.sh` refuses to run if the target database already exists,
+unless `FORCE=--force` is explicitly passed — that flag exists only for the
+genuine disaster-recovery case (the real database is gone or corrupted and
+must be rebuilt in place), not for routine verification.
+
+### Verifying a restore
+After restoring into a disposable database, confirm it's actually usable —
+don't trust a `pg_restore` exit code alone:
+```bash
+docker compose exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" postgres \
+  psql -U "$POSTGRES_USER" -d chronolegal_restore_check -c "\dt"
+docker compose exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" postgres \
+  psql -U "$POSTGRES_USER" -d chronolegal_restore_check \
+  -c "SELECT version_num FROM alembic_version;"   # must show the current head
+docker compose exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" postgres \
+  psql -U "$POSTGRES_USER" -d chronolegal_restore_check \
+  -c "SELECT COUNT(*) FROM legal_cases;"
+```
+Then drop the disposable database once satisfied:
+```bash
+docker compose exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" postgres \
+  psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE chronolegal_restore_check;"
+```
+
+### Recovering from a failed deployment or real data loss
+1. Stop the backend so nothing writes to the database mid-restore:
+   `docker compose stop backend`.
+2. Restore the most recent good backup with `FORCE=--force` **into the real
+   database name** (only once you've already verified that exact backup file
+   restores cleanly into a disposable database, per above).
+3. Run `docker compose exec backend alembic current` to confirm the restored
+   database is still at the expected head revision before restarting traffic.
+4. `docker compose start backend`.
+
+### ChromaDB
+ChromaDB persists to the `chromadb_data` Docker volume. It rebuilds from
+`legal_cases`/`case_chunks` via the data pipeline (`make data-pipeline`), so
+it is not part of the PostgreSQL backup above; a raw volume snapshot remains
+an option if re-embedding from scratch is too slow to be an acceptable
+recovery path:
+```bash
+docker run --rm -v chronolegal_chromadb_data:/data -v $(pwd)/backups:/backup \
+  alpine tar czf /backup/chromadb_$(date +%Y%m%d).tar.gz /data
+```
+
+### Automating backups (cron)
+No automated schedule is installed by anything in this repository — the
+script above must be wired into cron (or a systemd timer) yourself:
+```cron
+0 2 * * * cd /path/to/chronolegal && set -a && . ./.env && set +a && bash scripts/backup/backup_db.sh >> /var/log/chronolegal-backup.log 2>&1
+```
+
+### Backup security
+Treat backup files as sensitive production data — they contain full
+database contents (including hashed passwords and any stored personal
+data), not sanitized exports:
+- `backups/` is gitignored (`.gitignore`); never commit a `.dump` file.
+- Nothing in `docker-compose.yml`/nginx mounts or serves `backups/` — it is
+  not reachable over HTTP by nginx, the frontend, or any other container.
+- `backup_db.sh` writes backups `chmod 600` and the directory `chmod 700`.
+- Database credentials are read from the environment (`.env`) at run time
+  and are never written into a script, a backup filename, or a log line.
+
+### LOCAL BACKUP vs. DISASTER-RECOVERY BACKUP
+**A backup living only in `./backups` on the same host as the database is
+not disaster-recovery coverage** — it protects against database/container
+corruption or an operator mistake, but not against loss of the host itself
+(disk failure, accidental deletion, host compromise, the VM/server being
+destroyed). For genuine disaster recovery, copy backups off-host on a
+schedule (`rsync` to another machine, upload to S3/any object store, etc.).
+This repository does not currently implement off-host replication — that
+remains an operator responsibility beyond what's automated here.
 
 ---
 
