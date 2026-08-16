@@ -376,6 +376,16 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
             --profile production up -d --build postgres redis chromadb backend frontend nginx
 
+      # `docker compose logs` doesn't include healthcheck probe exec output —
+      # this captures the actual health status/probe log so a chromadb
+      # healthcheck failure is diagnosable instead of guessed at.
+      - name: Diagnose chromadb health (always runs)
+        if: always()
+        run: |
+          docker inspect --format='{{json .State.Health}}' chronolegal-chromadb 2>&1 || true
+          echo "--- chromadb container logs ---"
+          docker logs chronolegal-chromadb 2>&1 | tail -50 || true
+
       - name: Wait for nginx to report healthy
         run: |
           for i in $(seq 1 60); do
