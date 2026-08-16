@@ -327,3 +327,173 @@ jobs:
         run: |
           docker stop chronolegal-backend-smoke || true
           docker rm chronolegal-backend-smoke || true
+
+  # ── Docker Compose production stack smoke test ─────────────────────────────
+  # The jobs above prove individual images build/boot in isolation. This one
+  # actually runs the DOCUMENTED production entry point — the real compose
+  # invocation from docs/deployment.md / Makefile's `make prod`
+  # (`-f docker-compose.yml -f docker-compose.prod.yml --profile production`)
+  # — with real postgres/redis/chromadb containers wired together exactly as
+  # a real deployment would be. This is what actually caught (and now
+  # verifies the fix for) the backend/frontend build.target bug and the
+  # nginx static-file bind-mount that nothing populated. ollama is
+  # intentionally excluded (GPU device reservation the runner doesn't have,
+  # and no test here exercises live LLM inference — see docs/deployment.md's
+  # LLM section for what that would require).
+  docker-compose-prod-smoke:
+    name: Docker Compose production stack smoke test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write CI .env (non-default secrets — satisfies the production validator)
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_DB=chronolegal_prod_smoke
+          POSTGRES_USER=chronolegal_ci
+          POSTGRES_PASSWORD=ci-prod-smoke-postgres-password-not-real
+          REDIS_PASSWORD=ci-prod-smoke-redis-password-not-real
+          SECRET_KEY=ci-prod-smoke-secret-key-not-for-production-use
+          JWT_SECRET_KEY=ci-prod-smoke-jwt-secret-not-for-production-use
+          LLM_PROVIDER=ollama
+          SKIP_MODEL_WARMUP=true
+          VITE_API_BASE_URL=http://localhost/api/v1
+          VITE_WS_URL=ws://localhost/ws
+          EOF
+
+      - name: Build and start the production stack
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            --profile production up -d --build postgres redis chromadb backend frontend nginx
+
+      - name: Wait for nginx to report healthy
+        run: |
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' chronolegal-nginx 2>/dev/null || echo "starting")
+            if [ "$status" = "healthy" ]; then
+              echo "nginx healthy after $((i * 3))s"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "nginx never became healthy within 180s"
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml logs
+          exit 1
+
+      - name: Verify /health through nginx reports APP_ENV=production
+        run: |
+          response=$(curl -sf http://localhost/health)
+          echo "$response"
+          echo "$response" | grep -q '"environment":"production"' \
+            || (echo "Backend did not report APP_ENV=production through nginx" && exit 1)
+
+      - name: Verify Alembic is at head inside the running container
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend \
+            alembic current | tee /tmp/alembic-current.txt
+          grep -q "0002 (head)" /tmp/alembic-current.txt \
+            || (echo "Backend is not at the expected head revision" && exit 1)
+
+      - name: Verify frontend is served through nginx
+        run: |
+          response=$(curl -sf http://localhost/)
+          echo "$response" | grep -qi '<div id="root">' \
+            || (echo "nginx did not proxy the frontend SPA correctly" && exit 1)
+
+      - name: Auth smoke test through nginx (register, login, authenticated request, unauthorized/invalid rejection, refresh, logout revocation)
+        run: |
+          set -e
+          BASE=http://localhost/api/v1
+          EMAIL=ci-smoke@chronolegal.test
+          PASSWORD=CiSmokeTest123
+
+          curl -sf -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "$(jq -n \
+            --arg email "$EMAIL" --arg pw "$PASSWORD" \
+            '{email:$email, username:"ci_smoke_user", full_name:"CI Smoke Test", password:$pw}')" \
+            | jq .
+
+          login=$(curl -sf -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "$(jq -n \
+            --arg email "$EMAIL" --arg pw "$PASSWORD" '{email:$email, password:$pw}')")
+          access_token=$(echo "$login" | jq -r .access_token)
+          refresh_token=$(echo "$login" | jq -r .refresh_token)
+          [ -n "$access_token" ] && [ "$access_token" != "null" ] || (echo "No access token returned" && exit 1)
+          [ -n "$refresh_token" ] && [ "$refresh_token" != "null" ] || (echo "No refresh token returned" && exit 1)
+
+          me=$(curl -sf "$BASE/auth/me" -H "Authorization: Bearer $access_token")
+          echo "$me" | jq -e ".email == \"$EMAIL\"" > /dev/null \
+            || (echo "Authenticated /auth/me did not return the expected user" && exit 1)
+
+          unauth_status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/auth/me")
+          [ "$unauth_status" = "401" ] || (echo "Expected 401 without a token, got $unauth_status" && exit 1)
+
+          invalid_status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/auth/me" -H "Authorization: Bearer not-a-real-token")
+          [ "$invalid_status" = "401" ] || (echo "Expected 401 for an invalid token, got $invalid_status" && exit 1)
+
+          refresh=$(curl -sf -X POST "$BASE/auth/refresh" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg rt "$refresh_token" '{refresh_token:$rt}')")
+          new_refresh_token=$(echo "$refresh" | jq -r .refresh_token)
+          [ -n "$(echo "$refresh" | jq -r .access_token)" ] || (echo "Refresh did not return a new access token" && exit 1)
+
+          # Old refresh token was rotated out by the call above — it must now be rejected.
+          reuse_status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
+            -H "Content-Type: application/json" -d "$(jq -n --arg rt "$refresh_token" '{refresh_token:$rt}')")
+          [ "$reuse_status" = "401" ] || (echo "Rotated-out refresh token was not rejected (got $reuse_status)" && exit 1)
+
+          curl -sf -o /dev/null -w "%{http_code}\n" -X POST "$BASE/auth/logout" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg rt "$new_refresh_token" '{refresh_token:$rt}')"
+
+          loggedout_status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
+            -H "Content-Type: application/json" -d "$(jq -n --arg rt "$new_refresh_token" '{refresh_token:$rt}')")
+          [ "$loggedout_status" = "401" ] || (echo "Refresh token was still valid after logout (got $loggedout_status)" && exit 1)
+
+          echo "Auth smoke test passed: register, login, authenticated request, unauthorized/invalid-token rejection, refresh rotation, reused-token rejection, and logout revocation all verified through the real nginx -> backend -> postgres -> redis path."
+
+      - name: Verify refresh-token revocation fails CLOSED when Redis is down
+        run: |
+          set -e
+          BASE=http://localhost/api/v1
+
+          login=$(curl -sf -X POST "$BASE/auth/login" -H "Content-Type: application/json" \
+            -d '{"email": "ci-smoke@chronolegal.test", "password": "CiSmokeTest123"}')
+          refresh_token=$(echo "$login" | jq -r .refresh_token)
+
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml stop redis
+          sleep 2
+
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/auth/refresh" \
+            -H "Content-Type: application/json" -d "$(jq -n --arg rt "$refresh_token" '{refresh_token:$rt}')")
+          echo "refresh status with Redis down: $status"
+          [ "$status" = "401" ] || (echo "Refresh verification did not fail closed with Redis unreachable (got $status, expected 401)" && exit 1)
+
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml start redis
+
+      - name: Verify backend recovers after a restart
+        run: |
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost/health > /dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost/health > /dev/null 2>&1; then
+              echo "Backend recovered after restart in $((i * 2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend did not recover after restart within 60s"
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml logs backend
+          exit 1
+
+      - name: Dump stack logs
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml logs || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v --remove-orphans || true
+          rm -f .env
