@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_admin
 from app.core.database import get_db
-from app.schemas.analytics import AdminStats
+from app.schemas.analytics import AdminStats, SearchLogRead
+from app.schemas.user import UserRead
 from app.services.legal.analytics_service import AnalyticsService
 
 router = APIRouter()
@@ -18,10 +19,10 @@ async def get_admin_stats(
     return await svc.get_admin_stats()
 
 
-@router.get("/search-logs")
+@router.get("/search-logs", response_model=list[SearchLogRead])
 async def get_search_logs(
-    page: int = 1,
-    page_size: int = 50,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
     current_admin=Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -43,10 +44,10 @@ async def trigger_reindex(
     return {"task_id": task_id, "message": "Reindexing started in background"}
 
 
-@router.get("/users")
+@router.get("/users", response_model=list[UserRead])
 async def list_users(
-    page: int = 1,
-    page_size: int = 50,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
     current_admin=Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):

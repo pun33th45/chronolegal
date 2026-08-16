@@ -1,4 +1,21 @@
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel
+
+
+class SearchLogRead(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    query: str
+    rewritten_query: str | None = None
+    result_count: int | None = None
+    top_score: float | None = None
+    latency_ms: int | None = None
+    search_type: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class TopItem(BaseModel):

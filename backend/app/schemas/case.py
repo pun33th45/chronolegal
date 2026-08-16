@@ -47,6 +47,17 @@ class LegalCaseSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SimilarCaseResult(BaseModel):
+    """What SearchService.find_similar_cases actually returns — a
+    similarity-ranked summary from vector search metadata, not a full
+    LegalCase record (no id/judges/judgment_date are available there)."""
+
+    case_id: str
+    case_name: str
+    court: str | None = None
+    similarity_score: float
+
+
 class LegalCaseRead(BaseModel):
     id: uuid.UUID
     case_id: str

@@ -20,20 +20,28 @@ router = APIRouter()
 
 class ConnectionManager:
     def __init__(self) -> None:
-        self._connections: dict[str, WebSocket] = {}
+        # Multiple tabs/devices for the same user each get their own
+        # WebSocket, so each user_id maps to a *set* of connections rather
+        # than a single one — otherwise a second connection silently
+        # overwrites the first, and that first connection's eventual
+        # disconnect pops the (still-open) second one out of the map.
+        self._connections: dict[str, set[WebSocket]] = {}
 
     async def connect(self, user_id: str, ws: WebSocket) -> None:
         await ws.accept()
-        self._connections[user_id] = ws
+        self._connections.setdefault(user_id, set()).add(ws)
         logger.info(f"WS connected: user_id={user_id}")
 
-    def disconnect(self, user_id: str) -> None:
-        self._connections.pop(user_id, None)
+    def disconnect(self, user_id: str, ws: WebSocket) -> None:
+        conns = self._connections.get(user_id)
+        if conns:
+            conns.discard(ws)
+            if not conns:
+                self._connections.pop(user_id, None)
         logger.info(f"WS disconnected: user_id={user_id}")
 
     async def send(self, user_id: str, data: dict[str, Any]) -> None:
-        ws = self._connections.get(user_id)
-        if ws:
+        for ws in list(self._connections.get(user_id, ())):
             await ws.send_text(json.dumps(data))
 
 
@@ -93,6 +101,16 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                             conv = await conv_svc.get(
                                 uuid.UUID(conversation_id), uuid.UUID(user_id)
                             )
+                            if conv is None:
+                                await manager.send(
+                                    user_id,
+                                    {
+                                        "type": "error",
+                                        "error": "Conversation not found",
+                                        "conversation_id": conversation_id,
+                                    },
+                                )
+                                continue
                         else:
                             conv = await conv_svc.create(
                                 ConversationCreate(), uuid.UUID(user_id)
@@ -101,6 +119,7 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
 
                         history = await conv_svc.get_messages(conv.id, limit=10)
                         await conv_svc.add_message(conv.id, role="user", content=query)
+                        await db.commit()
 
                     async for chunk in rag.stream(
                         query=query,
@@ -123,10 +142,17 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                             role="assistant",
                             content=full_answer,
                         )
+                        await db.commit()
 
                 except Exception as e:
                     logger.error(f"WS chat error: {e}")
-                    await manager.send(user_id, {"type": "error", "error": str(e)})
+                    await manager.send(
+                        user_id,
+                        {
+                            "type": "error",
+                            "error": "An internal error occurred while processing your message.",
+                        },
+                    )
 
             else:
                 await manager.send(
@@ -134,4 +160,4 @@ async def ws_chat(websocket: WebSocket, token: str | None = None):
                 )
 
     except WebSocketDisconnect:
-        manager.disconnect(user_id)
+        manager.disconnect(user_id, websocket)

@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
@@ -142,7 +143,13 @@ async def chat_stream(
             yield f"data: {done_chunk.model_dump_json()}\n\n"
 
         except Exception as e:
-            error_chunk = StreamChunk(type="error", error=str(e))
+            logger.error(
+                f"Chat stream failed: conversation_id={conversation.id}, error={e}"
+            )
+            error_chunk = StreamChunk(
+                type="error",
+                error="An internal error occurred while generating the response.",
+            )
             yield f"data: {error_chunk.model_dump_json()}\n\n"
 
     return StreamingResponse(
@@ -158,8 +165,8 @@ async def chat_stream(
 
 @router.get("/conversations", response_model=list[ConversationRead])
 async def list_conversations(
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

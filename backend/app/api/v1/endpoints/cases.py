@@ -5,7 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.database import get_db
-from app.schemas.case import CaseChunkRead, LegalCaseRead, LegalCaseSummary
+from app.schemas.case import (
+    CaseChunkRead,
+    LegalCaseRead,
+    LegalCaseSummary,
+    SimilarCaseResult,
+)
 from app.services.legal.case_service import CaseService
 
 router = APIRouter()
@@ -59,7 +64,7 @@ async def get_case_chunks(
     return await svc.get_chunks(case.id)
 
 
-@router.get("/{case_id}/similar", response_model=list[LegalCaseSummary])
+@router.get("/{case_id}/similar", response_model=list[SimilarCaseResult])
 async def get_similar_cases(
     case_id: str,
     top_k: int = Query(default=5, ge=1, le=20),
