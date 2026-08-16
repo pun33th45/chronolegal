@@ -380,15 +380,39 @@ data), not sanitized exports:
 - Database credentials are read from the environment (`.env`) at run time
   and are never written into a script, a backup filename, or a log line.
 
-### LOCAL BACKUP vs. DISASTER-RECOVERY BACKUP
+### Off-host replication (`sync_offhost.sh`)
 **A backup living only in `./backups` on the same host as the database is
 not disaster-recovery coverage** — it protects against database/container
 corruption or an operator mistake, but not against loss of the host itself
 (disk failure, accidental deletion, host compromise, the VM/server being
-destroyed). For genuine disaster recovery, copy backups off-host on a
-schedule (`rsync` to another machine, upload to S3/any object store, etc.).
-This repository does not currently implement off-host replication — that
-remains an operator responsibility beyond what's automated here.
+destroyed).
+
+`scripts/backup/sync_offhost.sh` closes this gap without committing to any
+specific cloud provider: it's plain `rsync` over SSH to any remote host you
+already control (a second server, a NAS, a storage-only VPS, etc.) — no new
+SDK or cloud subscription required. It is **disabled by default** (a no-op,
+exit 0) unless you set:
+```bash
+OFFHOST_BACKUP_HOST=backup-user@backup-host.example.com
+OFFHOST_BACKUP_PATH=/remote/path/to/store/backups
+# optional:
+OFFHOST_SSH_KEY=/path/to/private_key
+```
+Chain it after a backup in cron:
+```cron
+0 2 * * * cd /path/to/chronolegal && set -a && . ./.env && set +a && bash scripts/backup/backup_db.sh && bash scripts/backup/sync_offhost.sh >> /var/log/chronolegal-backup.log 2>&1
+```
+It never deletes a local backup — it only ever adds a remote copy — so a
+failed sync (network issue, remote host down, wrong path) leaves local
+backups completely intact; it just means off-host coverage is stale until
+the next successful run. `rsync --checksum` verifies each transferred file
+by content hash, not just size/timestamp, so a corrupted transfer gets
+re-copied rather than silently accepted.
+
+**As shipped, no off-host destination is configured** — this script is the
+mechanism, not a working destination. You must point `OFFHOST_BACKUP_HOST`/
+`OFFHOST_BACKUP_PATH` at real infrastructure you control before off-host
+replication is actually happening.
 
 ---
 
