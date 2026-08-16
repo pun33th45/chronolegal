@@ -371,6 +371,23 @@ jobs:
           VITE_WS_URL=ws://localhost/ws
           EOF
 
+      # docker-compose.yml bind-mounts ./nginx/ssl:/etc/nginx/ssl:ro (added
+      # this session, see docs/deployment.md's SSL section) so a real
+      # deployment's certs actually reach the container. nginx/ssl/ is
+      # gitignored and doesn't exist in this checkout, and Docker
+      # auto-creates a missing bind-mount source as an empty host directory
+      # — which would shadow the Dockerfile's baked-in placeholder cert with
+      # nothing, and nginx fails to start with no cert to load. Generate the
+      # same kind of throwaway self-signed cert docs/deployment.md's
+      # "Option B" describes for exactly this situation.
+      - name: Generate a throwaway self-signed cert for nginx/ssl
+        run: |
+          mkdir -p nginx/ssl
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout nginx/ssl/privkey.pem \
+            -out nginx/ssl/fullchain.pem \
+            -subj "/CN=ci-smoke-test.invalid"
+
       - name: Build and start the production stack
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml \
@@ -505,3 +522,4 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v --remove-orphans || true
           rm -f .env
+          rm -rf nginx/ssl
