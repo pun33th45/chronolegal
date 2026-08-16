@@ -16,5 +16,12 @@ RUN mkdir -p /etc/nginx/ssl && \
 
 EXPOSE 80 443
 
+# 127.0.0.1, not localhost: confirmed via CI's docker-compose-prod-smoke
+# job that this healthcheck reliably fails with "Connection refused" —
+# `default.conf` isn't nginx's stock config (its own entrypoint log
+# confirms it skips auto-adding an IPv6 listener for non-default configs,
+# see 10-listen-on-ipv6-by-default.sh), so nginx only binds IPv4, but
+# `wget http://localhost/...` resolves "localhost" to ::1 first on this
+# base image and gets refused before ever falling back to IPv4.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD wget -q -O- http://localhost/health || exit 1
+    CMD wget -q -O- http://127.0.0.1/health || exit 1
