@@ -1,7 +1,5 @@
-import asyncio
 from typing import AsyncGenerator
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -16,50 +14,54 @@ from app.main import app
 # whatever POSTGRES_* settings/.env resolve to, matching docker-compose).
 # LegalCase relies on genuine PostgreSQL ARRAY behavior (unnest, ANY), which
 # has no SQLite equivalent, so the test database must be PostgreSQL too.
-engine_test = create_async_engine(settings.DATABASE_URL, echo=False)
-TestSessionLocal = async_sessionmaker(
-    bind=engine_test, class_=AsyncSession, expire_on_commit=False
-)
-
-
-async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with TestSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
-async def setup_test_db():
-    """Create/drop the schema once per session, against the real PostgreSQL
-    test database. Not autouse — only fixtures that actually need a database
-    (db, client) depend on it, so pure unit tests never touch the database."""
-    async with engine_test.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with engine_test.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+#
+# The engine is created fresh per test (see db_engine below), not once at
+# module scope: pytest-asyncio 0.24 gives each test function its own event
+# loop by default, and an asyncpg connection pool cannot be reused across
+# different event loops ("attached to a different loop" / "another
+# operation is in progress"). A single module-level engine bound to
+# whichever loop first used it would break as soon as a later test ran on
+# a different loop.
 
 
 @pytest_asyncio.fixture
-async def db(setup_test_db) -> AsyncGenerator[AsyncSession, None]:
-    async with TestSessionLocal() as session:
+async def db_engine():
+    """Fresh engine + schema per test, bound to that test's own event loop.
+    create_all/drop_all use checkfirst, so the DDL cost is small."""
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db(db_engine) -> AsyncGenerator[AsyncSession, None]:
+    session_maker = async_sessionmaker(
+        bind=db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with session_maker() as session:
         yield session
         await session.rollback()
 
 
 @pytest_asyncio.fixture
-async def client(setup_test_db) -> AsyncGenerator[AsyncClient, None]:
+async def client(db_engine) -> AsyncGenerator[AsyncClient, None]:
+    session_maker = async_sessionmaker(
+        bind=db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with session_maker() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(
         transport=ASGITransport(app=app),
