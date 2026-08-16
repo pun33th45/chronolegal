@@ -6,8 +6,22 @@
 # (e.g. `docker compose -f docker-compose.yml -f docker-compose.prod.yml ...`).
 # Passing explicit -f files disables Compose's automatic docker-compose.override.yml
 # discovery, so the development-only APP_ENV=development override never applies here.
+#
+# build.target overrides: docker-compose.yml's base service definitions default
+# to target: development (so a bare `docker compose up` without this overlay
+# still works for local dev). Without the overrides below, `docker compose -f
+# docker-compose.yml -f docker-compose.prod.yml up --build` (e.g. `make prod`)
+# would silently build and run the development image/CMD in "production" —
+# no non-root user, no --workers 4, and for the frontend, the Vite dev server
+# instead of the built static bundle.
 
 services:
   backend:
+    build:
+      target: production
     environment:
       APP_ENV: production
+
+  frontend:
+    build:
+      target: production

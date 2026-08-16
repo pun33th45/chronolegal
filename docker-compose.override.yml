@@ -1,6 +1,30 @@
 # Development overrides - hot reload, debug mode, no GPU requirement
+#
+# Also republishes host ports the base docker-compose.yml intentionally
+# omits (postgres/chromadb/redis/ollama/backend) so local tooling (a DB GUI,
+# curling the API directly without going through nginx, etc.) can still
+# reach them — this file is never loaded for the documented production
+# invocation, so it doesn't reintroduce the public-exposure gap it fixes.
 
 services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  chromadb:
+    ports:
+      - "8001:8000"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  ollama:
+    deploy:
+      resources: {}
+    ports:
+      - "11434:11434"
+
   backend:
     build:
       target: development
@@ -8,12 +32,12 @@ services:
     environment:
       APP_ENV: development
       DEBUG: "true"
+    ports:
+      - "8000:8000"
 
   frontend:
     build:
       target: development
     command: npm run dev -- --host 0.0.0.0
-
-  ollama:
-    deploy:
-      resources: {}
+    ports:
+      - "5173:5173"
