@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 import chromadb
+from chromadb.api import ClientAPI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from loguru import logger
 
@@ -31,7 +32,7 @@ def _get_embedding_model() -> HuggingFaceEmbeddings:
 
 
 @lru_cache(maxsize=1)
-def _get_chroma_client() -> chromadb.HttpClient:
+def _get_chroma_client() -> ClientAPI:
     return chromadb.HttpClient(
         host=settings.CHROMA_HOST,
         port=settings.CHROMA_PORT,

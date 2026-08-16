@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import HTTPException, status
 
 
@@ -9,7 +11,7 @@ class AppException(Exception):
 
 
 class NotFoundError(AppException):
-    def __init__(self, resource: str, identifier: str | int) -> None:
+    def __init__(self, resource: str, identifier: str | int | uuid.UUID) -> None:
         super().__init__(f"{resource} with id={identifier} not found", status_code=404)
 
 

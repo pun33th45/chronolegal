@@ -14,6 +14,7 @@ import re
 from loguru import logger
 from pydantic import BaseModel, model_validator
 
+from app.models.case import LegalCase
 from app.schemas.case import TimelineEvent
 from app.services.ai.json_parser import parse_llm_json
 from app.services.ai.llm_provider import generate_text
@@ -75,7 +76,7 @@ async def _extract_chunk(chunk: str) -> list[TimelineEvent]:
 
 
 class TimelineService:
-    async def generate(self, case: any) -> list[TimelineEvent]:
+    async def generate(self, case: LegalCase) -> list[TimelineEvent]:
         text = case.full_text or case.summary or ""
         if not text.strip():
             return []

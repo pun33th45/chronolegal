@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from app.models.case import LegalCase
 from app.schemas.case import SummaryResponse
 from app.services.ai.llm_provider import generate_text
 from app.services.ai.prompt_templates import (
@@ -17,7 +18,7 @@ class SummaryService:
     }
 
     async def generate(
-        self, case: any, summary_type: str, max_length: int
+        self, case: LegalCase, summary_type: str, max_length: int
     ) -> SummaryResponse:
         text = case.full_text or case.headnotes or case.summary or ""
         if not text.strip():

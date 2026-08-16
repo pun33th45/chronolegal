@@ -12,7 +12,7 @@ class InterceptHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            level = logger.level(record.levelname).name
+            level: int | str = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
 

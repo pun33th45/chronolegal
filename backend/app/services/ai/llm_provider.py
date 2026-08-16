@@ -9,7 +9,7 @@ from functools import lru_cache
 from typing import AsyncGenerator
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
 from app.core.config import settings
@@ -74,7 +74,7 @@ def get_llm() -> BaseChatModel:
 
 async def generate_text(prompt: str, system_prompt: str | None = None) -> str:
     llm = get_llm()
-    messages = []
+    messages: list[BaseMessage] = []
     if system_prompt:
         messages.append(SystemMessage(content=system_prompt))
     messages.append(HumanMessage(content=prompt))
@@ -92,7 +92,7 @@ async def stream_text(
     system_prompt: str | None = None,
 ) -> AsyncGenerator[str, None]:
     llm = get_llm()
-    messages = []
+    messages: list[BaseMessage] = []
     if system_prompt:
         messages.append(SystemMessage(content=system_prompt))
     messages.append(HumanMessage(content=prompt))
