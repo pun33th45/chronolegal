@@ -38,7 +38,13 @@ class CaseService:
         if date_to:
             query = query.where(LegalCase.judgment_date <= date_to)
         if act:
-            query = query.where(LegalCase.acts.any(act))
+            # SQLAlchemy's ARRAY comparator .any(scalar) compiles to
+            # `scalar = ANY(array_column)` — the documented ARRAY-specific
+            # overload, distinct from the boolean-criteria relationship
+            # .any() overload mypy's stub resolves to here. Verified
+            # correct against real PostgreSQL by
+            # tests/integration/test_array_queries.py.
+            query = query.where(LegalCase.acts.any(act))  # type: ignore[arg-type]
 
         offset = (page - 1) * page_size
         query = (

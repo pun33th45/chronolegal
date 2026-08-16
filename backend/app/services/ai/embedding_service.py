@@ -98,12 +98,16 @@ class EmbeddingService:
             embeddings = await self.embed_texts(batch_texts)
 
             loop = asyncio.get_event_loop()
+            # ChromaDB's Collection.upsert stub types embeddings/metadatas
+            # as narrow Unions that plain list[list[float]]/list[dict] fail
+            # to satisfy only because List is invariant — this is exactly
+            # ChromaDB's own documented usage pattern.
             await loop.run_in_executor(
                 None,
                 lambda: self.collection.upsert(
                     documents=batch_texts,
-                    embeddings=embeddings,
-                    metadatas=batch_meta,
+                    embeddings=embeddings,  # type: ignore[arg-type]
+                    metadatas=batch_meta,  # type: ignore[arg-type]
                     ids=batch_ids,
                 ),
             )

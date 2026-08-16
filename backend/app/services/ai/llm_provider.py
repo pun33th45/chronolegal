@@ -39,9 +39,13 @@ def _build_llm(
     if provider == "openai":
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(
+        # ChatOpenAI's stub lags its pydantic-alias/populate_by_name
+        # runtime behavior: max_tokens aliases max_completion_tokens, and
+        # api_key aliases openai_api_key (str auto-coerces to SecretStr).
+        # Verified correct via direct construction + field inspection.
+        return ChatOpenAI(  # type: ignore[call-arg]
             model=model,
-            api_key=settings.OPENAI_API_KEY,
+            api_key=settings.OPENAI_API_KEY,  # type: ignore[arg-type]
             temperature=temperature,
             max_tokens=max_tokens,
             streaming=True,
@@ -50,9 +54,14 @@ def _build_llm(
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(
+        # Same stub-vs-runtime gap as ChatOpenAI above: ChatAnthropic's
+        # actual __init__ is (*args, **kwargs) with populate_by_name=True;
+        # model/max_tokens are real fields, api_key aliases
+        # anthropic_api_key (str auto-coerces to SecretStr). Verified via
+        # direct construction + field inspection.
+        return ChatAnthropic(  # type: ignore[call-arg]
             model=model,
-            api_key=settings.ANTHROPIC_API_KEY,
+            api_key=settings.ANTHROPIC_API_KEY,  # type: ignore[arg-type]
             temperature=temperature,
             max_tokens=max_tokens,
         )

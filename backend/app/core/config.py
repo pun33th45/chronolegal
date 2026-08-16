@@ -188,7 +188,11 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # pydantic-settings' BaseSettings.__init__ populates required fields
+    # (e.g. SECRET_KEY) from environment variables / .env at runtime; mypy
+    # can't see that without the pydantic.mypy plugin, which was tested and
+    # caused mypy to hang (2min+, vs ~20s normally) on this codebase.
+    return Settings()  # type: ignore[call-arg]
 
 
 settings = get_settings()

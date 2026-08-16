@@ -40,10 +40,16 @@ class Reranker:
         pairs = [[query, doc] for doc in documents]
 
         loop = asyncio.get_event_loop()
-        scores = await loop.run_in_executor(
-            None,
-            lambda: self.model.predict(pairs, batch_size=16, show_progress_bar=False),
-        )
+
+        # sentence-transformers' documented CrossEncoder.predict usage is
+        # exactly list[list[str]] pairs; the stub's Union is too narrow due
+        # to List's invariance (mypy itself suggests Sequence instead).
+        def _predict():
+            return self.model.predict(  # type: ignore[arg-type]
+                pairs, batch_size=16, show_progress_bar=False
+            )
+
+        scores = await loop.run_in_executor(None, _predict)
 
         indexed = sorted(enumerate(scores.tolist()), key=lambda x: x[1], reverse=True)
         if top_k:
