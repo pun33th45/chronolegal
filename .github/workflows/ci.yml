@@ -352,6 +352,7 @@ jobs:
     name: Docker Compose production stack smoke test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -410,13 +411,13 @@ jobs:
           # does symlink to stdout) — dump the healthcheck probe output and
           # the actual log files directly instead.
           echo "--- nginx health status ---"
-          docker inspect --format='{{json .State.Health}}' chronolegal-nginx 2>&1 || true
+          timeout 10 docker inspect --format='{{json .State.Health}}' chronolegal-nginx 2>&1 || true
           echo "--- nginx error.log ---"
-          docker exec chronolegal-nginx cat /var/log/nginx/error.log 2>&1 || true
+          timeout 10 docker exec chronolegal-nginx cat /var/log/nginx/error.log 2>&1 || true
           echo "--- nginx access.log ---"
-          docker exec chronolegal-nginx cat /var/log/nginx/access.log 2>&1 || true
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml logs
+          timeout 10 docker exec chronolegal-nginx cat /var/log/nginx/access.log 2>&1 || true
+          timeout 20 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps || true
+          timeout 30 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs || true
           exit 1
 
       - name: Verify /health through nginx reports APP_ENV=production
