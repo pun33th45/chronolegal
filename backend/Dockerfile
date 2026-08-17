@@ -52,4 +52,8 @@ RUN adduser --disabled-password --gecos "" appuser && \
 USER appuser
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "uvloop"]
+# Shell form (not exec-form JSON array) so ${PORT:-8000} is expanded by the
+# shell at container startup: PaaS hosts like Render inject PORT and expect
+# the process to bind to it, while Docker Compose never sets PORT and must
+# keep defaulting to 8000.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 4 --loop uvloop
