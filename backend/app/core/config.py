@@ -57,6 +57,11 @@ class Settings(BaseSettings):
         )
 
     # ChromaDB
+    # "http": connect to an external Chroma server (self-hosted Docker
+    # Compose default — unchanged). "embedded": run Chroma in-process against
+    # local disk (CHROMA_PERSIST_DIRECTORY) — for hosts with no separate
+    # Chroma service, e.g. a free-tier PaaS demo deployment.
+    CHROMA_MODE: Literal["http", "embedded"] = "http"
     CHROMA_HOST: str = "chromadb"
     CHROMA_PORT: int = 8001
     CHROMA_COLLECTION_NAME: str = "legal_documents"
@@ -108,11 +113,17 @@ class Settings(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
 
     # Embeddings
+    # "huggingface": load EMBEDDING_MODEL locally via sentence-transformers
+    # (self-hosted default — unchanged). "openai": call OpenAI's embedding
+    # API instead — avoids loading a ~1.3GB model into process memory, for
+    # hosts with a tight RAM ceiling, e.g. a free-tier PaaS demo deployment.
+    EMBEDDING_PROVIDER: Literal["huggingface", "openai"] = "huggingface"
     EMBEDDING_MODEL: str = "BAAI/bge-large-en-v1.5"
     EMBEDDING_BACKUP_MODEL: str = "nlpaueb/legal-bert-base-uncased"
     EMBEDDING_DIMENSION: int = 1024
     EMBEDDING_BATCH_SIZE: int = 32
     EMBEDDING_DEVICE: str = "cpu"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     # RAG
     CHUNK_SIZE: int = 512

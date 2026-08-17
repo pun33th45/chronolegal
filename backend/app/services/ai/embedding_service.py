@@ -1,6 +1,7 @@
 """
-Embedding service using BAAI/bge-large-en-v1.5.
-Handles batched encoding, caching, and ChromaDB insertion.
+Embedding service — local (HuggingFace) or hosted (OpenAI) provider,
+selected via EMBEDDING_PROVIDER. Handles batched encoding, caching, and
+ChromaDB insertion.
 """
 
 import asyncio
@@ -12,6 +13,7 @@ from typing import Any
 import chromadb
 from chromadb.api import ClientAPI
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.embeddings import Embeddings
 from loguru import logger
 
 from app.core.config import settings
@@ -19,7 +21,18 @@ from app.core.redis import cache
 
 
 @lru_cache(maxsize=1)
-def _get_embedding_model() -> HuggingFaceEmbeddings:
+def _get_embedding_model() -> Embeddings:
+    if settings.EMBEDDING_PROVIDER == "openai":
+        from langchain_openai import OpenAIEmbeddings
+
+        logger.info(
+            f"Loading embedding provider: openai/{settings.OPENAI_EMBEDDING_MODEL}"
+        )
+        return OpenAIEmbeddings(  # type: ignore[call-arg]
+            model=settings.OPENAI_EMBEDDING_MODEL,
+            api_key=settings.OPENAI_API_KEY,  # type: ignore[arg-type]
+        )
+
     logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
     return HuggingFaceEmbeddings(
         model_name=settings.EMBEDDING_MODEL,
@@ -33,6 +46,12 @@ def _get_embedding_model() -> HuggingFaceEmbeddings:
 
 @lru_cache(maxsize=1)
 def _get_chroma_client() -> ClientAPI:
+    if settings.CHROMA_MODE == "embedded":
+        logger.info(
+            f"Starting embedded ChromaDB at {settings.CHROMA_PERSIST_DIRECTORY}"
+        )
+        return chromadb.PersistentClient(path=settings.CHROMA_PERSIST_DIRECTORY)
+
     return chromadb.HttpClient(
         host=settings.CHROMA_HOST,
         port=settings.CHROMA_PORT,
@@ -49,11 +68,11 @@ def get_collection() -> chromadb.Collection:
 
 class EmbeddingService:
     def __init__(self) -> None:
-        self._model: HuggingFaceEmbeddings | None = None
+        self._model: Embeddings | None = None
         self._collection: chromadb.Collection | None = None
 
     @property
-    def model(self) -> HuggingFaceEmbeddings:
+    def model(self) -> Embeddings:
         if self._model is None:
             self._model = _get_embedding_model()
         return self._model
