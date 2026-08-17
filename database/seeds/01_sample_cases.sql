@@ -6,7 +6,7 @@
 INSERT INTO legal_cases (
     id, case_id, case_name, case_number, petitioner, respondent,
     court, judges, judgment_date, acts, sections, keywords,
-    full_text, summary, decision_type, text_length, is_embedded, chunk_count,
+    full_text, summary, decision_type, text_length, citation_count, is_embedded, chunk_count,
     created_at, updated_at
 ) VALUES
 
@@ -29,6 +29,7 @@ INSERT INTO legal_cases (
     'Landmark judgment establishing the Basic Structure Doctrine. Parliament cannot amend the Constitution to destroy its essential features. Fundamental rights can be amended but the basic structure must be preserved.',
     'Partly Allowed',
     8500,
+    0,
     FALSE, 0,
     NOW(), NOW()
 ),
@@ -50,6 +51,7 @@ INSERT INTO legal_cases (
     'Expanded Article 21 to include due process. The procedure for depriving personal liberty must be fair, just and reasonable. Articles 14, 19 and 21 are interconnected — the Golden Triangle.',
     'Allowed',
     6200,
+    0,
     FALSE, 0,
     NOW(), NOW()
 ),
@@ -71,6 +73,7 @@ INSERT INTO legal_cases (
     'Right to livelihood is part of right to life under Article 21. The State must provide alternative accommodation before evicting pavement dwellers.',
     'Partly Allowed',
     5800,
+    0,
     FALSE, 0,
     NOW(), NOW()
 ),
@@ -92,6 +95,7 @@ INSERT INTO legal_cases (
     'Landmark case laying down Vishaka Guidelines on prevention of sexual harassment at workplaces. Court exercised its power under Article 32 in absence of legislation to fill the void.',
     'Guidelines Issued',
     4500,
+    0,
     FALSE, 0,
     NOW(), NOW()
 ),
@@ -113,6 +117,7 @@ INSERT INTO legal_cases (
     'Unanimous verdict decriminalizing consensual same-sex relations. Section 377 IPC, insofar as it criminalizes adult consensual acts, held unconstitutional. LGBT persons entitled to full constitutional protection.',
     'Allowed',
     9200,
+    0,
     FALSE, 0,
     NOW(), NOW()
 ),
@@ -134,6 +139,7 @@ INSERT INTO legal_cases (
     'Landmark judgment on Article 356 and President''s Rule. Floor test must precede dismissal of state government. Secularism is a basic feature of the Constitution. Laid down principles curbing misuse of Article 356.',
     'Allowed',
     7600,
+    0,
     FALSE, 0,
     NOW(), NOW()
 );
