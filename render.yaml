@@ -108,6 +108,15 @@ services:
         value: "true"
       - key: SKIP_MODEL_WARMUP
         value: "false"
+      # Redis is not provisioned for this demo (see report), but
+      # Settings._validate_production_secrets() unconditionally rejects the
+      # known-insecure default REDIS_PASSWORD ("redis_password") whenever
+      # APP_ENV=production, regardless of whether Redis is actually used —
+      # confirmed locally: omitting this crashes the backend at import time,
+      # before it ever reaches /health. This value is never used to connect
+      # to anything; it only needs to not equal the default.
+      - key: REDIS_PASSWORD
+        generateValue: true
 
   - type: web
     name: chronolegal-frontend
