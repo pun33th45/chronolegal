@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -39,6 +40,60 @@ async def _warmup_models() -> None:
         logger.warning(f"Reranker warmup failed (non-fatal): {exc}")
 
 
+async def _ensure_demo_data_ready() -> None:
+    """CHROMA_MODE=embedded only. Many free-tier hosts wipe local disk
+    between deploys/restarts, which silently empties the embedded Chroma
+    collection even though Postgres still has cases flagged is_embedded —
+    so search/chat would otherwise return nothing after any such restart.
+    Reseed the small sample dataset if Postgres is empty, and re-embed all
+    cases if the vector collection is empty, reusing the existing sample
+    seed file and per-case embedding logic (no new dataset invented)."""
+    from sqlalchemy import text as sa_text
+
+    from app.core.database import AsyncSessionLocal
+    from app.services.ai.embedding_service import EmbeddingService
+    from app.services.legal.case_service import CaseService
+
+    seed_path = (
+        Path(__file__).resolve().parents[2]
+        / "database"
+        / "seeds"
+        / "01_sample_cases.sql"
+    )
+
+    async with AsyncSessionLocal() as db:
+        case_count = (
+            await db.execute(sa_text("SELECT COUNT(*) FROM legal_cases"))
+        ).scalar_one()
+        if case_count == 0 and seed_path.exists():
+            await db.execute(sa_text(seed_path.read_text(encoding="utf-8")))
+            await db.commit()
+            logger.info("Demo mode: seeded sample legal cases (table was empty)")
+
+    embedder = EmbeddingService()
+    vector_count = await embedder.get_collection_count()
+    if vector_count > 0:
+        return
+
+    logger.info(
+        "Demo mode: embedded Chroma collection is empty — re-embedding sample cases"
+    )
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            sa_text("UPDATE legal_cases SET is_embedded = FALSE, chunk_count = 0")
+        )
+        await db.commit()
+        cases = await CaseService(db).get_unembedded(limit=1000)
+        for case in cases:
+            try:
+                chunk_count = await embedder._embed_case(case)
+                case.is_embedded = True
+                case.chunk_count = chunk_count
+            except Exception as exc:
+                logger.warning(f"Demo mode: failed to embed case {case.case_id}: {exc}")
+        await db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -48,6 +103,12 @@ async def lifespan(app: FastAPI):
 
     await run_migrations()
     logger.info("Database migrations applied")
+
+    if settings.CHROMA_MODE == "embedded":
+        try:
+            await _ensure_demo_data_ready()
+        except Exception as exc:
+            logger.warning(f"Demo data bootstrap failed (non-fatal): {exc}")
 
     try:
         redis = await get_redis()
