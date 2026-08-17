@@ -4,15 +4,30 @@ tests/conftest.py's db/db_engine fixtures). EmbeddingService's actual
 Chroma/embedding calls are mocked — this exercises the seed/reconciliation
 SQL logic, not the embedding pipeline itself, which has no local coverage
 without a running Chroma server or network access.
+
+Uses a session factory bound to the per-test db_engine fixture (not the
+app's global AsyncSessionLocal/engine): that global engine is a
+process-wide singleton bound to whichever event loop first used it, which
+breaks under pytest-asyncio's one-event-loop-per-test-function default —
+the same reason conftest.py's own db/client fixtures build a fresh engine
+per test instead of reusing the app's.
 """
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.database import AsyncSessionLocal
 from app.main import _ensure_demo_data_ready
 from app.models.case import LegalCase
 from app.services.ai.embedding_service import EmbeddingService
+
+
+@pytest_asyncio.fixture
+async def session_factory(db_engine):
+    return async_sessionmaker(
+        bind=db_engine, class_=AsyncSession, expire_on_commit=False
+    )
 
 
 async def _collection_count(value):
@@ -23,14 +38,14 @@ async def _collection_count(value):
 
 
 @pytest.mark.asyncio
-async def test_seeds_sample_cases_when_table_is_empty(db_engine, monkeypatch):
+async def test_seeds_sample_cases_when_table_is_empty(session_factory, monkeypatch):
     monkeypatch.setattr(
         EmbeddingService, "get_collection_count", await _collection_count(1)
     )
 
-    await _ensure_demo_data_ready()
+    await _ensure_demo_data_ready(session_factory=session_factory)
 
-    async with AsyncSessionLocal() as verify_db:
+    async with session_factory() as verify_db:
         count = (
             await verify_db.execute(text("SELECT COUNT(*) FROM legal_cases"))
         ).scalar_one()
@@ -38,7 +53,9 @@ async def test_seeds_sample_cases_when_table_is_empty(db_engine, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_does_not_reseed_when_cases_already_exist(db, db_engine, monkeypatch):
+async def test_does_not_reseed_when_cases_already_exist(
+    db, session_factory, monkeypatch
+):
     db.add(LegalCase(case_id="existing-case", case_name="Existing Case", full_text="x"))
     await db.commit()
 
@@ -46,9 +63,9 @@ async def test_does_not_reseed_when_cases_already_exist(db, db_engine, monkeypat
         EmbeddingService, "get_collection_count", await _collection_count(1)
     )
 
-    await _ensure_demo_data_ready()
+    await _ensure_demo_data_ready(session_factory=session_factory)
 
-    async with AsyncSessionLocal() as verify_db:
+    async with session_factory() as verify_db:
         count = (
             await verify_db.execute(text("SELECT COUNT(*) FROM legal_cases"))
         ).scalar_one()
@@ -57,7 +74,7 @@ async def test_does_not_reseed_when_cases_already_exist(db, db_engine, monkeypat
 
 @pytest.mark.asyncio
 async def test_reembeds_all_cases_when_vector_collection_is_empty(
-    db, db_engine, monkeypatch
+    db, session_factory, monkeypatch
 ):
     db.add(
         LegalCase(
@@ -81,10 +98,10 @@ async def test_reembeds_all_cases_when_vector_collection_is_empty(
     )
     monkeypatch.setattr(EmbeddingService, "_embed_case", _fake_embed_case)
 
-    await _ensure_demo_data_ready()
+    await _ensure_demo_data_ready(session_factory=session_factory)
 
     assert embedded_case_ids == ["demo-1"]
-    async with AsyncSessionLocal() as verify_db:
+    async with session_factory() as verify_db:
         row = (
             await verify_db.execute(
                 text(
@@ -98,7 +115,7 @@ async def test_reembeds_all_cases_when_vector_collection_is_empty(
 
 @pytest.mark.asyncio
 async def test_skips_reembedding_when_vector_collection_is_populated(
-    db, db_engine, monkeypatch
+    db, session_factory, monkeypatch
 ):
     db.add(
         LegalCase(
@@ -122,10 +139,10 @@ async def test_skips_reembedding_when_vector_collection_is_populated(
     )
     monkeypatch.setattr(EmbeddingService, "_embed_case", _fake_embed_case)
 
-    await _ensure_demo_data_ready()
+    await _ensure_demo_data_ready(session_factory=session_factory)
 
     assert embed_calls == []
-    async with AsyncSessionLocal() as verify_db:
+    async with session_factory() as verify_db:
         row = (
             await verify_db.execute(
                 text(

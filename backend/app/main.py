@@ -40,19 +40,26 @@ async def _warmup_models() -> None:
         logger.warning(f"Reranker warmup failed (non-fatal): {exc}")
 
 
-async def _ensure_demo_data_ready() -> None:
+async def _ensure_demo_data_ready(session_factory=None) -> None:
     """CHROMA_MODE=embedded only. Many free-tier hosts wipe local disk
     between deploys/restarts, which silently empties the embedded Chroma
     collection even though Postgres still has cases flagged is_embedded —
     so search/chat would otherwise return nothing after any such restart.
     Reseed the small sample dataset if Postgres is empty, and re-embed all
     cases if the vector collection is empty, reusing the existing sample
-    seed file and per-case embedding logic (no new dataset invented)."""
+    seed file and per-case embedding logic (no new dataset invented).
+
+    session_factory defaults to the app's real AsyncSessionLocal; tests
+    inject one bound to an isolated per-test engine instead (the global
+    engine is a process-wide singleton bound to whichever event loop first
+    used it, which breaks under pytest-asyncio's per-test event loops)."""
     from sqlalchemy import text as sa_text
 
     from app.core.database import AsyncSessionLocal
     from app.services.ai.embedding_service import EmbeddingService
     from app.services.legal.case_service import CaseService
+
+    session_factory = session_factory or AsyncSessionLocal
 
     seed_path = (
         Path(__file__).resolve().parents[2]
@@ -61,7 +68,7 @@ async def _ensure_demo_data_ready() -> None:
         / "01_sample_cases.sql"
     )
 
-    async with AsyncSessionLocal() as db:
+    async with session_factory() as db:
         case_count = (
             await db.execute(sa_text("SELECT COUNT(*) FROM legal_cases"))
         ).scalar_one()
@@ -78,7 +85,7 @@ async def _ensure_demo_data_ready() -> None:
     logger.info(
         "Demo mode: embedded Chroma collection is empty — re-embedding sample cases"
     )
-    async with AsyncSessionLocal() as db:
+    async with session_factory() as db:
         await db.execute(
             sa_text("UPDATE legal_cases SET is_embedded = FALSE, chunk_count = 0")
         )
