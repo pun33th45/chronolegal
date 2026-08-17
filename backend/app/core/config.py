@@ -98,7 +98,9 @@ class Settings(BaseSettings):
         return v or info.data.get("SECRET_KEY", "")
 
     # LLM
-    LLM_PROVIDER: Literal["ollama", "openai", "anthropic", "huggingface"] = "ollama"
+    LLM_PROVIDER: Literal["ollama", "openai", "anthropic", "huggingface", "groq"] = (
+        "ollama"
+    )
     LLM_MODEL: str = "llama3.1:8b"
     LLM_BASE_URL: str = "http://ollama:11434"
     LLM_TEMPERATURE: float = 0.1
@@ -111,6 +113,12 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
+    GROQ_API_KEY: str = ""
+    # llama-3.1-8b-instant: verified buildable against the installed
+    # langchain-groq client as of this writing. Groq's hosted-model lineup
+    # changes over time — confirm this is still current before relying on
+    # live inference.
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
 
     # Embeddings
     # "huggingface": load EMBEDDING_MODEL locally via sentence-transformers

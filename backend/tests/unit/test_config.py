@@ -44,6 +44,17 @@ def test_development_env_allows_default_secrets():
     assert settings.is_production is False
 
 
+def test_groq_llm_provider_is_accepted():
+    settings = Settings(
+        SECRET_KEY="dev-only-test-key",
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="fake-test-key-not-real",
+    )
+
+    assert settings.LLM_PROVIDER == "groq"
+    assert settings.GROQ_MODEL
+
+
 def test_skip_model_warmup_defaults_to_false():
     """Normal deployments must still get the warmup's first-request
     latency benefit unless explicitly opted out (e.g. CI's Docker runtime

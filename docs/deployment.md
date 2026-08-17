@@ -478,3 +478,201 @@ docker compose up -d
 # Roll back database migration
 docker compose exec backend alembic downgrade -1
 ```
+
+---
+
+## College Demo Deployment (Free-Tier: Vercel + Koyeb + Supabase + Groq)
+
+This is a separate, additive deployment path for a low-traffic college
+demonstration — it does not replace anything above. The self-hosted Docker
+Compose stack documented in the rest of this file remains the primary,
+fully-featured deployment; nothing in this section changes it.
+
+```
+Vercel (React/Vite frontend)
+        |
+        v
+Koyeb (FastAPI backend, existing Dockerfile)
+   |              |
+   |              +--> Groq API (LLM_PROVIDER=groq)
+   |
+   +--> Embedded Chroma (CHROMA_MODE=embedded, in-process, no separate service)
+   |
+   +--> HuggingFace embeddings (EMBEDDING_PROVIDER=huggingface, unchanged default)
+   |
+   +--> Supabase PostgreSQL (via the same POSTGRES_*/DATABASE_URL settings)
+```
+
+No Redis, no Ollama, no nginx, no separate Chroma service. Nothing here makes
+OpenAI mandatory — Groq is the LLM provider for this path, and the existing
+OpenAI/Anthropic/Ollama providers remain fully intact and selectable via
+`LLM_PROVIDER` for anyone self-hosting instead.
+
+### Required environment variables
+
+Set these on the Koyeb backend service (never commit real values — the
+repo's `.env.example` documents the same variables with placeholder values):
+
+```
+APP_ENV=production
+DEBUG=false
+SECRET_KEY=<generate a real random value>
+JWT_SECRET_KEY=<generate a real random value>
+
+POSTGRES_HOST=<from Supabase>
+POSTGRES_PORT=<from Supabase>
+POSTGRES_DB=<from Supabase>
+POSTGRES_USER=<from Supabase>
+POSTGRES_PASSWORD=<from Supabase>
+
+CHROMA_MODE=embedded
+CHROMA_PERSIST_DIRECTORY=/tmp/chronolegal-chroma
+
+EMBEDDING_PROVIDER=huggingface
+
+LLM_PROVIDER=groq
+GROQ_API_KEY=<from Groq console — never commit this>
+GROQ_MODEL=llama-3.1-8b-instant
+
+CORS_ORIGINS=<the actual Vercel frontend URL, once known>
+CORS_ALLOW_CREDENTIALS=true
+```
+
+On Vercel (frontend), set as a build-time environment variable:
+
+```
+VITE_API_BASE_URL=<the actual Koyeb backend URL>/api/v1
+```
+
+`VITE_WS_BASE_URL` is intentionally not introduced — the frontend has no
+WebSocket client code; chat streaming uses Server-Sent Events over a plain
+`fetch()` call, not a WebSocket.
+
+### Where secrets are entered
+
+Never in this repo. `GROQ_API_KEY`, `SECRET_KEY`, `JWT_SECRET_KEY`, and the
+Supabase `POSTGRES_PASSWORD` are entered directly into the Koyeb service's
+environment-variable dashboard (or via the Koyeb CLI's `--env` flags), and
+`VITE_API_BASE_URL` into Vercel's Project Settings → Environment Variables.
+
+### Deploying the backend (Koyeb)
+
+The existing `backend/Dockerfile` is reused as-is — it already binds to
+`${PORT:-8000}` (shell-form `CMD`), which is what Koyeb (and any similar
+PaaS) injects at runtime.
+
+1. In the Koyeb dashboard (or CLI), create a new Web Service from this
+   GitHub repo, Docker deployment method, build context `backend/`,
+   Dockerfile `backend/Dockerfile`.
+2. Set the health check path to `/health`.
+3. Set the environment variables listed above.
+4. Deploy, then confirm `GET https://<your-koyeb-url>/health` returns
+   `{"status": "healthy", ...}`.
+
+No `koyeb.yaml`/declarative app-spec file is included here — Koyeb's exact
+current declarative schema wasn't verified against live documentation as
+part of this change, and inventing one risks shipping unsupported syntax.
+Use the dashboard/CLI flow above, or check Koyeb's own current docs if a
+declarative file is preferred later.
+
+### Deploying the frontend (Vercel)
+
+`frontend/vercel.json` sets the build command, output directory (`dist`,
+matching the existing Vite config), and the SPA rewrite rule Vercel needs
+for client-side routing.
+
+1. Import this repo into Vercel.
+2. Since the frontend lives in a subdirectory, set **Root Directory:
+   `frontend`** in the Vercel project settings (this is a dashboard setting,
+   not expressible inside `vercel.json` itself).
+3. Set `VITE_API_BASE_URL` as an environment variable (build-time).
+4. Deploy. Vercel's generated HTTPS URL is sufficient for a college demo —
+   no custom domain is required.
+
+### Connecting Supabase PostgreSQL
+
+The application already expects generic `POSTGRES_HOST` / `POSTGRES_PORT` /
+`POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` (see
+`backend/app/core/config.py`'s `Settings.build_database_url`), which already
+assembles the correct `postgresql+asyncpg://...` URL SQLAlchemy's async
+engine and Alembic both need — no database-layer code change was required
+or made for this.
+
+Two ways to point it at Supabase, both already supported without any code
+change:
+
+- **Individual parts** (`POSTGRES_HOST`/`PORT`/`DB`/`USER`/`PASSWORD`): copy
+  these directly from Supabase's connection-info page.
+- **Full override**: set `DATABASE_URL` directly instead (the existing
+  validator only builds one from the individual parts when `DATABASE_URL`
+  itself is left empty), e.g. including an explicit
+  `?ssl=require` suffix if your Supabase project's connection string
+  requires it.
+
+**SSL is not guessed here.** Supabase's dashboard shows both a "Direct
+connection" and a "Connection pooler" string for each project, and whether
+an explicit SSL parameter is required depends on which one you use and
+Supabase's current settings for your project — copy the exact string
+Supabase gives you (as `DATABASE_URL`) rather than assuming the individual-
+parts form will work unmodified.
+
+Standard Postgres extensions this app's own init script normally creates
+(`uuid-ossp`, `pg_trgm`, `btree_gin` — see
+`database/migrations/001_initial_schema.sql`) do not run automatically
+against a managed database like Supabase. Create them once, manually,
+before running migrations:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "btree_gin";
+```
+
+Then let the backend's own startup (`run_migrations()` in
+`backend/app/core/database.py`) apply Alembic migrations as it already does
+on every boot.
+
+### Configuring CORS
+
+Set `CORS_ORIGINS` on the backend to the exact Vercel URL once it's known
+(not `*` — `Settings._validate_production_secrets` already blocks
+`CORS_ORIGINS=*` combined with `CORS_ALLOW_CREDENTIALS=true` in production).
+
+### Limitations of this free/low-cost hosted architecture
+
+- **Cold starts**: free/low-cost tiers on most PaaS providers (Koyeb
+  included) can sleep an idle service and take a few seconds to cold-start
+  on the next request. Acceptable for a demo; not something this
+  architecture tries to eliminate.
+- **Embedded Chroma is ephemeral**: `CHROMA_MODE=embedded` persists to local
+  disk (`CHROMA_PERSIST_DIRECTORY`), which most free-tier compute is not
+  guaranteed to retain across restarts/redeploys. The existing demo
+  bootstrap (`_ensure_demo_data_ready()` in `backend/app/main.py`, added for
+  the free-tier deployment work) already handles this: on startup, if
+  `legal_cases` is empty it reseeds the small sample dataset, and if the
+  Chroma collection is empty it re-embeds everything — using the existing
+  seed file and embedding pipeline, nothing new invented for this.
+- **HuggingFace embeddings and free-tier RAM**: `EMBEDDING_PROVIDER=huggingface`
+  (the default, kept as-is per this deployment's requirements) loads
+  `BAAI/bge-large-en-v1.5` (~1.3GB of weights) into the backend process.
+  Whether this fits comfortably within Koyeb's current free-tier RAM
+  allocation was not verified against live Koyeb specs as part of this
+  change — check Koyeb's current published limits before relying on it. If
+  it doesn't fit in practice, the codebase already supports
+  `EMBEDDING_PROVIDER=openai` as a fallback (see `backend/app/services/ai/
+  embedding_service.py`) without further code changes — not used by default
+  here because the task for this deployment explicitly asked to keep
+  HuggingFace unless proven impossible.
+- **Redis is intentionally not provisioned**: rate limiting is already
+  in-memory (no Redis dependency), and every caching call site already
+  degrades gracefully without it. The one real, disclosed trade-off: the
+  refresh-token revocation denylist (`backend/app/core/security.py`) fails
+  closed by design — without Redis, `/auth/refresh` always fails, so demo
+  users stay logged in for the access token's natural lifetime
+  (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, 60 minutes by default) and then need
+  to log in again. This is not a weakened security behavior; it's the
+  existing fail-closed design doing exactly what it's supposed to when
+  Redis isn't there.
+- **Demo dataset**: the seeded dataset is the existing small set of landmark
+  cases in `database/seeds/01_sample_cases.sql` (six cases) — enough to
+  demonstrate search/RAG/chat, not a production-scale corpus.

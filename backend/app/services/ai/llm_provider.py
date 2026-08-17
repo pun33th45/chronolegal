@@ -1,6 +1,6 @@
 """
 LLM Provider factory — swap models by changing LLM_PROVIDER in .env.
-Supported: ollama, openai, anthropic
+Supported: ollama, openai, anthropic, groq
 
 Each provider's client is built once and cached per unique configuration.
 """
@@ -64,6 +64,23 @@ def _build_llm(
             api_key=settings.ANTHROPIC_API_KEY,  # type: ignore[arg-type]
             temperature=temperature,
             max_tokens=max_tokens,
+        )
+
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+
+        # ChatGroq's actual __init__ is (*args, **kwargs) with
+        # populate_by_name=True; model_name/max_tokens are real fields,
+        # api_key aliases groq_api_key and timeout aliases request_timeout
+        # (str/int auto-coerce). Verified via direct construction + field
+        # inspection, same as the ChatOpenAI/ChatAnthropic branches above.
+        return ChatGroq(  # type: ignore[call-arg]
+            model=model,
+            api_key=settings.GROQ_API_KEY,  # type: ignore[arg-type]
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            streaming=True,
         )
 
     raise ValueError(f"Unsupported LLM provider: {provider}")
