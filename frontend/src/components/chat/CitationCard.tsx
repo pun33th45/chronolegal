@@ -13,6 +13,8 @@ interface CitationCardProps {
 
 export function CitationCard({ citation, index, className }: CitationCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const excerpt = citation.chunk_text ?? citation.content
+  const relevanceScore = citation.relevance_score ?? citation.similarity_score
 
   return (
     <div className={cn('citation-badge rounded-lg overflow-hidden', className)}>
@@ -44,9 +46,9 @@ export function CitationCard({ citation, index, className }: CitationCardProps) 
             className="overflow-hidden"
           >
             <div className="border-t border-white/10 px-3 pb-3 pt-2 space-y-2.5">
-              {citation.chunk_text && (
+              {excerpt && (
                 <blockquote className="text-xs text-foreground/80 italic border-l-2 border-legal-gold/50 pl-3 line-clamp-4">
-                  "{citation.chunk_text}"
+                  "{excerpt}"
                 </blockquote>
               )}
 
@@ -71,17 +73,17 @@ export function CitationCard({ citation, index, className }: CitationCardProps) 
                 )}
               </div>
 
-              {citation.relevance_score !== undefined && (
+              {relevanceScore !== undefined && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted">Relevance</span>
                   <div className="flex-1 h-1 rounded-full bg-white/10">
                     <div
                       className="h-1 rounded-full bg-legal-gold/70"
-                      style={{ width: `${Math.round(citation.relevance_score * 100)}%` }}
+                      style={{ width: `${Math.round(relevanceScore * 100)}%` }}
                     />
                   </div>
                   <Badge variant="gold" className="text-[10px]">
-                    {Math.round(citation.relevance_score * 100)}%
+                    {Math.round(relevanceScore * 100)}%
                   </Badge>
                 </div>
               )}
