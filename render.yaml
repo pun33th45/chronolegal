@@ -1,0 +1,137 @@
+# Render Blueprint for the ChronoLegal FREE-TIER COLLEGE DEMO deployment.
+#
+# This is an ADDITIVE, demo-specific deployment path. It does not replace or
+# modify docker-compose.yml / docker-compose.prod.yml, which remain the
+# primary, fully-featured self-hosted deployment (see docs/deployment.md).
+#
+# Architecture:
+#   - Frontend: Render Static Site, existing Vite build, unmodified.
+#   - Backend: Render Web Service (Docker, existing backend/Dockerfile,
+#     unmodified), CHROMA_MODE=embedded (in-process Chroma, no separate
+#     vector-DB service), EMBEDDING_PROVIDER=huggingface with EMBEDDING_MODEL
+#     overridden to a small model (see below), LLM_PROVIDER=groq.
+#   - Database: the user's own existing Supabase PostgreSQL project — NOT
+#     Render's managed Postgres. POSTGRES_* values must be entered manually
+#     in the Render dashboard (sync: false below); this file cannot know
+#     them and must never contain real credentials.
+#   - Redis: intentionally NOT provisioned — see docs/deployment.md's
+#     Redis section for the one disclosed trade-off this causes (refresh
+#     tokens stop working past their natural expiry without it; login/
+#     access still work).
+#
+# EMBEDDING_MODEL override — why this matters for a FREE Render instance:
+#   The app's default embedding model, BAAI/bge-large-en-v1.5, is a
+#   335M-parameter model (~1.3GB of weights alone) — Render's free web
+#   service has a hard 512MB RAM ceiling, so the default model would very
+#   likely crash the service during startup warmup. sentence-transformers/
+#   all-MiniLM-L6-v2 is still a real, standard HuggingFace model through the
+#   exact same EMBEDDING_PROVIDER=huggingface code path (no code change) —
+#   it's the same model already proven to correctly retrieve relevant legal
+#   text in this repo's real (non-mocked) RAG retrieval integration test
+#   (backend/tests/integration/test_embedding_retrieval.py). This is a
+#   config choice for the free-tier deployment, not an architecture change.
+#
+# Field names (env: docker / static, generateValue, sync: false) match
+# Render's Blueprint reference as of this writing — confirm against
+# Render's current docs before running `render blueprint launch`, since
+# that schema does evolve.
+#
+# REQUIRED MANUAL STEPS after connecting this repo in the Render dashboard:
+#   1. Enter GROQ_API_KEY and the five POSTGRES_* values below in the Render
+#      dashboard (every `sync: false` entry) — never put real values here.
+#      For POSTGRES_*, use your Supabase project's SESSION POOLER connection
+#      details (Project Settings -> Database -> Connect -> "Session pooler"
+#      tab), not the "Direct connection" ones — the direct-connection host
+#      requires IPv6, which Render (like most PaaS hosts) does not support
+#      for outbound connections; the session pooler is Supabase's own
+#      documented recommendation for exactly this situation (a persistent,
+#      IPv4-only backend process).
+#   2. Once both services have their Render URLs, set CORS_ORIGINS below to
+#      the frontend's exact URL, and VITE_API_BASE_URL to the backend's
+#      exact URL (+ /api/v1), then redeploy both.
+#   3. Run once, manually, against your Supabase database (Supabase's SQL
+#      Editor), if not already present:
+#        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+#        CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+#        CREATE EXTENSION IF NOT EXISTS "btree_gin";
+#      (These normally get created by this repo's own docker-entrypoint-
+#      initdb.d init script, which never runs against a managed database
+#      like Supabase.)
+#   4. The backend's own startup already calls run_migrations() (Alembic)
+#      on every boot, so no separate migration step is needed.
+
+services:
+  - type: web
+    name: chronolegal-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # Existing Supabase project — enter your Session Pooler values here
+      # (see step 1 above). Settings.build_database_url() already assembles
+      # these into a correctly-prefixed postgresql+asyncpg:// URL (see
+      # backend/app/core/config.py) — no code change needed.
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        sync: false
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: CHROMA_MODE
+        value: embedded
+      - key: CHROMA_PERSIST_DIRECTORY
+        value: /tmp/chronolegal-chroma
+      - key: EMBEDDING_PROVIDER
+        value: huggingface
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: CORS_ORIGINS
+        value: "https://REPLACE-WITH-YOUR-FRONTEND-URL.onrender.com"
+      - key: CORS_ALLOW_CREDENTIALS
+        value: "true"
+      - key: SKIP_MODEL_WARMUP
+        value: "false"
+      # Redis is not provisioned for this demo, but
+      # Settings._validate_production_secrets() unconditionally rejects the
+      # known-insecure default REDIS_PASSWORD ("redis_password") whenever
+      # APP_ENV=production, regardless of whether Redis is actually used —
+      # confirmed locally in an earlier phase of this work: omitting this
+      # crashes the backend at import time, before it ever reaches /health.
+      # This value is never used to connect to anything; it only needs to
+      # not equal the default.
+      - key: REDIS_PASSWORD
+        generateValue: true
+
+  - type: web
+    name: chronolegal-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: "https://REPLACE-WITH-YOUR-BACKEND-URL.onrender.com/api/v1"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

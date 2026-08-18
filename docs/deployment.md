@@ -481,7 +481,7 @@ docker compose exec backend alembic downgrade -1
 
 ---
 
-## College Demo Deployment (Free-Tier: Vercel + Koyeb + Supabase + Groq)
+## College Demo Deployment (Free-Tier: Render + Supabase + Groq)
 
 This is a separate, additive deployment path for a low-traffic college
 demonstration — it does not replace anything above. The self-hosted Docker
@@ -489,59 +489,78 @@ Compose stack documented in the rest of this file remains the primary,
 fully-featured deployment; nothing in this section changes it.
 
 ```
-Vercel (React/Vite frontend)
-        |
-        v
-Koyeb (FastAPI backend, existing Dockerfile)
-   |              |
-   |              +--> Groq API (LLM_PROVIDER=groq)
-   |
-   +--> Embedded Chroma (CHROMA_MODE=embedded, in-process, no separate service)
-   |
-   +--> HuggingFace embeddings (EMBEDDING_PROVIDER=huggingface, unchanged default)
-   |
-   +--> Supabase PostgreSQL (via the same POSTGRES_*/DATABASE_URL settings)
+                    ┌─────────────────┐
+                    │ Render Static   │
+                    │ React + Vite    │
+                    └────────┬────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │ Render Backend  │
+                    │ FastAPI         │
+                    │                 │
+                    │ RAG             │
+                    │ ├─ Chroma       │
+                    │ ├─ Embeddings   │
+                    │ ├─ Retrieval    │
+                    │ └─ Reranker     │
+                    └──────┬─────┬────┘
+                           │     │
+                   ┌───────┘     └────────┐
+                   ▼                       ▼
+             ┌─────────────┐        ┌───────────┐
+             │  Supabase   │        │   Groq    │
+             │ PostgreSQL  │        │    LLM    │
+             └─────────────┘        └───────────┘
 ```
 
-No Redis, no Ollama, no nginx, no separate Chroma service. Nothing here makes
-OpenAI mandatory — Groq is the LLM provider for this path, and the existing
-OpenAI/Anthropic/Ollama providers remain fully intact and selectable via
-`LLM_PROVIDER` for anyone self-hosting instead.
+The judgment cases are the knowledge base: they're chunked, embedded with a
+HuggingFace model, and stored in an embedded Chroma vector index. A user
+question is embedded the same way, matched against that index (with
+optional BM25 hybrid fusion and cross-encoder reranking), and only the
+retrieved judgment chunks — never the model's general knowledge — are
+handed to Groq to generate an answer. Citations returned alongside the
+answer point back to the exact retrieved case/chunk. None of this pipeline
+changes for this deployment path; only *where* it runs does.
+
+No Redis, no Ollama, no nginx, no Kubernetes, no microservices. Nothing here
+makes OpenAI mandatory — Groq is the LLM provider for this path, and the
+existing OpenAI/Anthropic/Ollama providers remain fully intact and
+selectable via `LLM_PROVIDER` for anyone self-hosting instead.
+
+`render.yaml` at the repo root is a Render Blueprint that creates both
+services (backend + frontend) in one step — see it for the exact, currently
+correct field values; this section explains the reasoning.
+
+### A free-tier-specific config choice: EMBEDDING_MODEL
+
+The app's default embedding model, `BAAI/bge-large-en-v1.5`, is a
+335M-parameter model (~1.3GB of weights alone). Render's free web service
+has a hard **512MB RAM** ceiling — the default model would very likely crash
+the service during startup warmup. `render.yaml` overrides
+`EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2` instead: still a
+real, standard model through the exact same `EMBEDDING_PROVIDER=huggingface`
+code path (no code change), and the same model already proven to correctly
+retrieve relevant legal text in this repo's real (non-mocked) RAG retrieval
+integration test (`backend/tests/integration/test_embedding_retrieval.py`).
+This is a configuration choice for the free tier, not an architecture
+change — self-hosted Docker Compose deployments keep the larger default
+model untouched.
 
 ### Required environment variables
 
-Set these on the Koyeb backend service (never commit real values — the
-repo's `.env.example` documents the same variables with placeholder values):
+See `render.yaml` for the authoritative list (most are pre-filled by the
+Blueprint). The values that must be entered manually, never committed:
 
 ```
-APP_ENV=production
-DEBUG=false
-SECRET_KEY=<generate a real random value>
-JWT_SECRET_KEY=<generate a real random value>
-
-POSTGRES_HOST=<from Supabase>
-POSTGRES_PORT=<from Supabase>
-POSTGRES_DB=<from Supabase>
-POSTGRES_USER=<from Supabase>
-POSTGRES_PASSWORD=<from Supabase>
-
-CHROMA_MODE=embedded
-CHROMA_PERSIST_DIRECTORY=/tmp/chronolegal-chroma
-
-EMBEDDING_PROVIDER=huggingface
-
-LLM_PROVIDER=groq
-GROQ_API_KEY=<from Groq console — never commit this>
-GROQ_MODEL=llama-3.1-8b-instant
-
-CORS_ORIGINS=<the actual Vercel frontend URL, once known>
-CORS_ALLOW_CREDENTIALS=true
-```
-
-On Vercel (frontend), set as a build-time environment variable:
-
-```
-VITE_API_BASE_URL=<the actual Koyeb backend URL>/api/v1
+POSTGRES_HOST      <- from Supabase, Session Pooler (see below)
+POSTGRES_PORT      <- from Supabase, Session Pooler
+POSTGRES_DB        <- from Supabase, Session Pooler
+POSTGRES_USER      <- from Supabase, Session Pooler
+POSTGRES_PASSWORD  <- from Supabase, Session Pooler
+GROQ_API_KEY       <- from console.groq.com
+CORS_ORIGINS       <- the actual Render Static Site URL, once known
+VITE_API_BASE_URL  <- the actual Render backend URL + /api/v1, once known
 ```
 
 `VITE_WS_BASE_URL` is intentionally not introduced — the frontend has no
@@ -550,44 +569,26 @@ WebSocket client code; chat streaming uses Server-Sent Events over a plain
 
 ### Where secrets are entered
 
-Never in this repo. `GROQ_API_KEY`, `SECRET_KEY`, `JWT_SECRET_KEY`, and the
-Supabase `POSTGRES_PASSWORD` are entered directly into the Koyeb service's
-environment-variable dashboard (or via the Koyeb CLI's `--env` flags), and
-`VITE_API_BASE_URL` into Vercel's Project Settings → Environment Variables.
+Never in this repo. The Render Blueprint wizard prompts for every
+`sync: false` value in `render.yaml` (the `POSTGRES_*` values and
+`GROQ_API_KEY`) at Blueprint-apply time; `SECRET_KEY`/`JWT_SECRET_KEY`/
+`REDIS_PASSWORD` are auto-generated (`generateValue: true`) and never seen
+by anyone. `VITE_API_BASE_URL` goes into the frontend static site's own
+environment variables in the Render dashboard.
 
-### Deploying the backend (Koyeb)
+### Deploying via the Blueprint
 
-The existing `backend/Dockerfile` is reused as-is — it already binds to
-`${PORT:-8000}` (shell-form `CMD`), which is what Koyeb (and any similar
-PaaS) injects at runtime.
-
-1. In the Koyeb dashboard (or CLI), create a new Web Service from this
-   GitHub repo, Docker deployment method, build context `backend/`,
-   Dockerfile `backend/Dockerfile`.
-2. Set the health check path to `/health`.
-3. Set the environment variables listed above.
-4. Deploy, then confirm `GET https://<your-koyeb-url>/health` returns
+1. In the Render dashboard: New → Blueprint → connect this GitHub repo. It
+   reads `render.yaml` and creates both `chronolegal-backend` (Docker web
+   service) and `chronolegal-frontend` (static site).
+2. Fill in the prompted values: the five `POSTGRES_*` fields (from
+   Supabase's Session Pooler, not Direct Connection — see below) and
+   `GROQ_API_KEY`.
+3. Apply. Once the backend has a URL, set `CORS_ORIGINS` on it and
+   `VITE_API_BASE_URL` on the frontend to each other's real URLs, then
+   redeploy both.
+4. Confirm `GET https://<your-backend>.onrender.com/health` returns
    `{"status": "healthy", ...}`.
-
-No `koyeb.yaml`/declarative app-spec file is included here — Koyeb's exact
-current declarative schema wasn't verified against live documentation as
-part of this change, and inventing one risks shipping unsupported syntax.
-Use the dashboard/CLI flow above, or check Koyeb's own current docs if a
-declarative file is preferred later.
-
-### Deploying the frontend (Vercel)
-
-`frontend/vercel.json` sets the build command, output directory (`dist`,
-matching the existing Vite config), and the SPA rewrite rule Vercel needs
-for client-side routing.
-
-1. Import this repo into Vercel.
-2. Since the frontend lives in a subdirectory, set **Root Directory:
-   `frontend`** in the Vercel project settings (this is a dashboard setting,
-   not expressible inside `vercel.json` itself).
-3. Set `VITE_API_BASE_URL` as an environment variable (build-time).
-4. Deploy. Vercel's generated HTTPS URL is sufficient for a college demo —
-   no custom domain is required.
 
 ### Connecting Supabase PostgreSQL
 
@@ -598,29 +599,23 @@ assembles the correct `postgresql+asyncpg://...` URL SQLAlchemy's async
 engine and Alembic both need — no database-layer code change was required
 or made for this.
 
-Two ways to point it at Supabase, both already supported without any code
-change:
-
-- **Individual parts** (`POSTGRES_HOST`/`PORT`/`DB`/`USER`/`PASSWORD`): copy
-  these directly from Supabase's connection-info page.
-- **Full override**: set `DATABASE_URL` directly instead (the existing
-  validator only builds one from the individual parts when `DATABASE_URL`
-  itself is left empty), e.g. including an explicit
-  `?ssl=require` suffix if your Supabase project's connection string
-  requires it.
-
-**SSL is not guessed here.** Supabase's dashboard shows both a "Direct
-connection" and a "Connection pooler" string for each project, and whether
-an explicit SSL parameter is required depends on which one you use and
-Supabase's current settings for your project — copy the exact string
-Supabase gives you (as `DATABASE_URL`) rather than assuming the individual-
-parts form will work unmodified.
+**Use the Session Pooler, not the Direct Connection.** Supabase's Direct
+Connection host requires IPv6, which Render (like most PaaS hosts) does not
+support for outbound connections — the connection will simply fail. The
+Session Pooler is Supabase's own documented recommendation for exactly this
+situation (a persistent, long-running, IPv4-only backend process — as
+opposed to the Transaction Pooler, aimed at short-lived serverless
+functions). Get it from Supabase's dashboard: Project Settings → Database →
+Connect → "Session pooler" tab. It has a different host
+(`aws-0-<region>.pooler.supabase.com`), a different username format
+(`postgres.<project-ref>`), but the same `POSTGRES_HOST`/`PORT`/`DB`/`USER`/
+`PASSWORD` shape the app already expects — no code change needed.
 
 Standard Postgres extensions this app's own init script normally creates
 (`uuid-ossp`, `pg_trgm`, `btree_gin` — see
 `database/migrations/001_initial_schema.sql`) do not run automatically
-against a managed database like Supabase. Create them once, manually,
-before running migrations:
+against a managed database like Supabase. Create them once, manually, via
+Supabase's SQL Editor, if not already present:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -634,35 +629,28 @@ on every boot.
 
 ### Configuring CORS
 
-Set `CORS_ORIGINS` on the backend to the exact Vercel URL once it's known
-(not `*` — `Settings._validate_production_secrets` already blocks
-`CORS_ORIGINS=*` combined with `CORS_ALLOW_CREDENTIALS=true` in production).
+Set `CORS_ORIGINS` on the backend to the exact Render Static Site URL once
+it's known (not `*` — `Settings._validate_production_secrets` already
+blocks `CORS_ORIGINS=*` combined with `CORS_ALLOW_CREDENTIALS=true` in
+production).
 
 ### Limitations of this free/low-cost hosted architecture
 
-- **Cold starts**: free/low-cost tiers on most PaaS providers (Koyeb
-  included) can sleep an idle service and take a few seconds to cold-start
-  on the next request. Acceptable for a demo; not something this
-  architecture tries to eliminate.
+- **Cold starts**: Render's free web services spin down after 15 minutes of
+  inactivity and take roughly a minute to wake back up on the next request.
+  Acceptable for a demo; not something this architecture tries to
+  eliminate.
 - **Embedded Chroma is ephemeral**: `CHROMA_MODE=embedded` persists to local
-  disk (`CHROMA_PERSIST_DIRECTORY`), which most free-tier compute is not
-  guaranteed to retain across restarts/redeploys. The existing demo
-  bootstrap (`_ensure_demo_data_ready()` in `backend/app/main.py`, added for
-  the free-tier deployment work) already handles this: on startup, if
-  `legal_cases` is empty it reseeds the small sample dataset, and if the
-  Chroma collection is empty it re-embeds everything — using the existing
-  seed file and embedding pipeline, nothing new invented for this.
-- **HuggingFace embeddings and free-tier RAM**: `EMBEDDING_PROVIDER=huggingface`
-  (the default, kept as-is per this deployment's requirements) loads
-  `BAAI/bge-large-en-v1.5` (~1.3GB of weights) into the backend process.
-  Whether this fits comfortably within Koyeb's current free-tier RAM
-  allocation was not verified against live Koyeb specs as part of this
-  change — check Koyeb's current published limits before relying on it. If
-  it doesn't fit in practice, the codebase already supports
-  `EMBEDDING_PROVIDER=openai` as a fallback (see `backend/app/services/ai/
-  embedding_service.py`) without further code changes — not used by default
-  here because the task for this deployment explicitly asked to keep
-  HuggingFace unless proven impossible.
+  disk (`CHROMA_PERSIST_DIRECTORY`), which Render's free tier does not
+  guarantee to retain across restarts/redeploys/spin-downs. The existing
+  demo bootstrap (`_ensure_demo_data_ready()` in `backend/app/main.py`)
+  already handles this: on startup, if `legal_cases` is empty it reseeds
+  the small sample dataset, and if the Chroma collection is empty it
+  re-embeds everything — using the existing seed file and embedding
+  pipeline, nothing new invented for this.
+- **HuggingFace embeddings and free-tier RAM**: see the EMBEDDING_MODEL
+  section above — the free-tier deployment uses a smaller real model
+  specifically because the production default does not fit in 512MB.
 - **Redis is intentionally not provisioned**: rate limiting is already
   in-memory (no Redis dependency), and every caching call site already
   degrades gracefully without it. The one real, disclosed trade-off: the
