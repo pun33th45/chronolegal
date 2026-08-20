@@ -104,7 +104,7 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
-        value: llama-3.1-8b-instant
+        value: openai/gpt-oss-20b
       - key: CORS_ORIGINS
         value: "https://REPLACE-WITH-YOUR-FRONTEND-URL.onrender.com"
       - key: CORS_ALLOW_CREDENTIALS

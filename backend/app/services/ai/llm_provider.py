@@ -86,11 +86,21 @@ def _build_llm(
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
+_PROVIDER_MODEL_SETTING = {
+    "ollama": "LLM_MODEL",
+    "openai": "OPENAI_MODEL",
+    "anthropic": "ANTHROPIC_MODEL",
+    "groq": "GROQ_MODEL",
+}
+
+
 def get_llm() -> BaseChatModel:
     """Return the cached LLM client for the currently configured provider."""
+    provider = settings.LLM_PROVIDER.lower()
+    model_setting = _PROVIDER_MODEL_SETTING.get(provider, "LLM_MODEL")
     return _build_llm(
-        provider=settings.LLM_PROVIDER.lower(),
-        model=settings.LLM_MODEL,
+        provider=provider,
+        model=getattr(settings, model_setting),
         base_url=settings.ollama_base_url,
         temperature=settings.LLM_TEMPERATURE,
         max_tokens=settings.LLM_MAX_TOKENS,

@@ -21,7 +21,7 @@ import httpx
 import pytest
 
 from app.core.config import settings
-from app.services.ai.llm_provider import _build_llm, generate_text, stream_text
+from app.services.ai.llm_provider import _build_llm, generate_text, get_llm, stream_text
 
 
 def test_ollama_timeout_reaches_async_client():
@@ -95,6 +95,25 @@ def test_unsupported_provider_raises_value_error():
             max_tokens=100,
             timeout=10,
         )
+
+
+def test_get_llm_uses_the_provider_specific_model_setting(monkeypatch):
+    """Regression test: get_llm() previously always passed settings.LLM_MODEL
+    (the Ollama-style default) to _build_llm() regardless of LLM_PROVIDER,
+    so selecting LLM_PROVIDER=groq/openai/anthropic silently ignored
+    GROQ_MODEL/OPENAI_MODEL/ANTHROPIC_MODEL and tried to call the real
+    provider with an Ollama model name — caught by making a real, live Groq
+    API call, which every existing (fully mocked) test had missed since
+    they all call _build_llm() directly with an explicit model, bypassing
+    get_llm()'s wiring entirely."""
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "groq")
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "fake-test-key-not-real")
+    monkeypatch.setattr(settings, "GROQ_MODEL", "test-provider-specific-model")
+    monkeypatch.setattr(settings, "LLM_MODEL", "llama3.1:8b")  # must NOT be used
+
+    llm = get_llm()
+
+    assert llm.model_name == "test-provider-specific-model"
 
 
 @pytest.mark.asyncio

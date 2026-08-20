@@ -114,11 +114,15 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     GROQ_API_KEY: str = ""
-    # llama-3.1-8b-instant: verified buildable against the installed
-    # langchain-groq client as of this writing. Groq's hosted-model lineup
-    # changes over time — confirm this is still current before relying on
-    # live inference.
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    # openai/gpt-oss-20b: verified via a real, live Groq API call (not just
+    # constructibility) as of this writing — llama-3.1-8b-instant, the
+    # previous default, no longer exists in Groq's live model catalog.
+    # gpt-oss is a reasoning model but keeps its chain-of-thought in a
+    # separate response field (unlike e.g. qwen/qwen3.6-27b, which was
+    # also tested and inlines raw <think> tags into the visible answer
+    # content — unsuitable here). Groq's hosted-model lineup changes over
+    # time; confirm this is still current before relying on live inference.
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
 
     # Embeddings
     # "huggingface": load EMBEDDING_MODEL locally via sentence-transformers

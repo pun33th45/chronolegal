@@ -58,7 +58,7 @@ EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
 LLM_PROVIDER=groq
 GROQ_API_KEY=<your real Groq key>
-GROQ_MODEL=llama-3.1-8b-instant
+GROQ_MODEL=openai/gpt-oss-20b
 
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 CORS_ALLOW_CREDENTIALS=true
