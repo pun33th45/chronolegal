@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 # Values shipped in .env.example — forbidden in production
 _DEFAULT_SECRETS: frozenset[str] = frozenset(
@@ -50,11 +51,19 @@ class Settings(BaseSettings):
         if v:
             return v
         data = info.data
-        return (
-            f"postgresql+asyncpg://{data.get('POSTGRES_USER')}:"
-            f"{data.get('POSTGRES_PASSWORD')}@{data.get('POSTGRES_HOST')}:"
-            f"{data.get('POSTGRES_PORT')}/{data.get('POSTGRES_DB')}"
-        )
+        # URL.create() percent-encodes each component itself — plain
+        # f-string concatenation (the previous approach) breaks whenever a
+        # credential contains a URL-reserved character (e.g. a password
+        # containing "@" gets misparsed as the user:password@host
+        # separator, silently producing the wrong host).
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=data.get("POSTGRES_USER"),
+            password=data.get("POSTGRES_PASSWORD"),
+            host=data.get("POSTGRES_HOST"),
+            port=data.get("POSTGRES_PORT"),
+            database=data.get("POSTGRES_DB"),
+        ).render_as_string(hide_password=False)
 
     # ChromaDB
     # "http": connect to an external Chroma server (self-hosted Docker
@@ -81,10 +90,14 @@ class Settings(BaseSettings):
         if v:
             return v
         data = info.data
-        return (
-            f"redis://:{data.get('REDIS_PASSWORD')}@{data.get('REDIS_HOST')}:"
-            f"{data.get('REDIS_PORT')}/{data.get('REDIS_DB')}"
-        )
+        # Same reserved-character hazard as build_database_url above.
+        return URL.create(
+            drivername="redis",
+            password=data.get("REDIS_PASSWORD"),
+            host=data.get("REDIS_HOST"),
+            port=data.get("REDIS_PORT"),
+            database=str(data.get("REDIS_DB")),
+        ).render_as_string(hide_password=False)
 
     # JWT
     JWT_SECRET_KEY: str = ""

@@ -19,6 +19,7 @@ import {
 import { chatApi, feedbackApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/utils/cn'
+import { CitationCard } from '@/components/chat/CitationCard'
 import type { Citation, Message } from '@/types'
 
 const SUGGESTED = [
@@ -409,14 +410,8 @@ function CitationList({ citations }: { citations: Citation[] }) {
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="citation-badge w-full text-left block"
           >
-            <span className="font-semibold mr-1">[{c.rank}]</span>
-            {c.case_name}
-            {c.court && <span className="text-primary/60 ml-1">· {c.court}</span>}
-            <span className="ml-1 text-primary/50">
-              ({(c.similarity_score * 100).toFixed(0)}% match)
-            </span>
+            <CitationCard citation={c} index={i} />
           </motion.div>
         ))}
       </div>

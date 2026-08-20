@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Local embedded-Chroma vector data (CHROMA_MODE=embedded, e.g. docs/DEMO.md's
+# local run path) — generated runtime data, not source.
+backend/chroma_data/
+
 # Python
 __pycache__/
 *.pyc

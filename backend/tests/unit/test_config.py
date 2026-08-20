@@ -13,6 +13,7 @@ validator does its job once APP_ENV is correctly set to "production".
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.engine import make_url
 
 from app.core.config import Settings
 
@@ -42,6 +43,35 @@ def test_development_env_allows_default_secrets():
 
     assert settings.APP_ENV == "development"
     assert settings.is_production is False
+
+
+def test_build_database_url_survives_a_password_containing_at_sign():
+    """Regression test: a plain f-string 'user:password@host' concatenation
+    (the previous approach) mis-parses as soon as the password itself
+    contains "@" — the password's own "@" gets read as the user:password@
+    host separator, corrupting the parsed host (observed for real against
+    a live Supabase Session Pooler password containing "@": the parsed
+    host came out as "@aws-0-....pooler.supabase.com", which doesn't
+    exist). URL.create(...).render_as_string() percent-encodes each
+    component instead of concatenating raw strings."""
+    settings = Settings(
+        SECRET_KEY="dev-only-test-key",
+        # Explicitly empty: an ambient DATABASE_URL env var (CI and this
+        # project's own local test runs both export one) otherwise wins
+        # over the POSTGRES_* overrides below, since pydantic-settings
+        # only falls back to this validator's "build from parts" branch
+        # when DATABASE_URL itself is unset/empty.
+        DATABASE_URL="",
+        POSTGRES_HOST="pooler.example.com",
+        POSTGRES_USER="postgres.someproject",
+        POSTGRES_PASSWORD="has-an-@-sign-in-it",
+    )
+
+    url = make_url(settings.DATABASE_URL)
+
+    assert url.host == "pooler.example.com"
+    assert url.username == "postgres.someproject"
+    assert url.password == "has-an-@-sign-in-it"
 
 
 def test_groq_llm_provider_is_accepted():
