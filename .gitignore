@@ -7,6 +7,11 @@
 # local run path) — generated runtime data, not source.
 backend/chroma_data/
 
+# Locally-downloaded LegalBERT weights (~440MB) — huggingface_hub's own
+# downloader proved unreliable in this environment, so EMBEDDING_MODEL points
+# at this local directory instead of the HF repo id; not source, not synced.
+backend/.model_cache/
+
 # Python
 __pycache__/
 *.pyc

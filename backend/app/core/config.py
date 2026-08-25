@@ -142,10 +142,14 @@ class Settings(BaseSettings):
     # (self-hosted default — unchanged). "openai": call OpenAI's embedding
     # API instead — avoids loading a ~1.3GB model into process memory, for
     # hosts with a tight RAM ceiling, e.g. a free-tier PaaS demo deployment.
-    EMBEDDING_PROVIDER: Literal["huggingface", "openai"] = "huggingface"
+    # "legalbert": load EMBEDDING_MODEL as a bare HuggingFace encoder
+    # (transformers.AutoModel, not sentence-transformers — LegalBERT
+    # checkpoints aren't packaged with an ST pooling head) and mean-pool
+    # token embeddings ourselves; see LegalBertEmbeddings.
+    EMBEDDING_PROVIDER: Literal["huggingface", "openai", "legalbert"] = "huggingface"
     EMBEDDING_MODEL: str = "BAAI/bge-large-en-v1.5"
     EMBEDDING_BACKUP_MODEL: str = "nlpaueb/legal-bert-base-uncased"
-    EMBEDDING_DIMENSION: int = 1024
+    EMBEDDING_DIMENSION: int = 768
     EMBEDDING_BATCH_SIZE: int = 32
     EMBEDDING_DEVICE: str = "cpu"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -154,6 +158,13 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 128
     TOP_K_RETRIEVAL: int = 12
+    # When a query is scoped to one case (filters.case_id), the candidate
+    # pool is already narrowed to that case's own chunks by the Chroma
+    # metadata filter, so retrieving a wider pre-rerank set costs little and
+    # gives the cross-encoder more real candidates to choose from — matters
+    # once a judgment has more chunks than TOP_K_RETRIEVAL would otherwise
+    # let through.
+    TOP_K_RETRIEVAL_SCOPED: int = 50
     TOP_K_RERANKED: int = 5
     SIMILARITY_THRESHOLD: float = 0.6
     RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"

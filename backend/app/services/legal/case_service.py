@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,51 @@ from app.models.case import CaseChunk, LegalCase
 class CaseService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def create_case(
+        self,
+        case_id: str,
+        case_name: str,
+        full_text: str,
+        court: str | None = None,
+        source_file: str | None = None,
+    ) -> LegalCase:
+        """Persists an uploaded document as a real LegalCase row so it
+        shows up in Case Viewer / list_cases / analytics like any seeded
+        case — not just as vectors floating in Chroma."""
+        case = LegalCase(
+            case_id=case_id,
+            case_name=case_name,
+            court=court,
+            full_text=full_text,
+            text_length=len(full_text),
+            source_file=source_file,
+        )
+        self.db.add(case)
+        await self.db.flush()
+        return case
+
+    async def add_chunks(
+        self,
+        case_db_id: uuid.UUID,
+        chunks: list[tuple[str, dict[str, Any]]],
+        chroma_ids: list[str],
+    ) -> None:
+        """chunks: (text, metadata) pairs from LegalChunker.chunk_legal();
+        chroma_ids: the matching Chroma document ids, same order/length,
+        stored for bidirectional lookup between the two stores (ADR-002)."""
+        for (text, meta), chroma_id in zip(chunks, chroma_ids, strict=True):
+            self.db.add(
+                CaseChunk(
+                    case_id=case_db_id,
+                    chunk_index=meta["chunk_index"],
+                    content=text,
+                    chroma_id=chroma_id,
+                    start_char=meta.get("start_char"),
+                    end_char=meta.get("end_char"),
+                    chunk_metadata={"section_header": meta.get("section_header")},
+                )
+            )
 
     async def get_by_case_id(self, case_id: str) -> LegalCase | None:
         result = await self.db.execute(

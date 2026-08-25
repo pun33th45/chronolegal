@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
+  BotMessageSquare,
   Calendar,
   Clock,
   FileText,
   Gavel,
   List,
   Loader2,
+  ScanSearch,
   Scale,
   Tag,
 } from 'lucide-react'
@@ -81,9 +83,26 @@ export default function CaseViewerPage() {
           animate={{ opacity: 1, y: 0 }}
           className="glass rounded-xl p-6"
         >
-          <h1 className="text-xl font-serif font-bold text-foreground mb-3">
-            {caseData.case_name}
-          </h1>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h1 className="text-xl font-serif font-bold text-foreground mb-3">
+              {caseData.case_name}
+            </h1>
+            <div className="flex items-center gap-2">
+              {caseData.source_file && (
+                <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                  <ScanSearch className="w-3.5 h-3.5" />
+                  Auto-extracted via NER
+                </span>
+              )}
+              <Link
+                to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(caseData.case_name)}`}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <BotMessageSquare className="w-3.5 h-3.5" />
+                Research in Chat
+              </Link>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
             {caseData.court && (
               <div className="flex items-center gap-1.5">
@@ -306,6 +325,12 @@ export default function CaseViewerPage() {
               <p className="text-foreground">{caseData.respondent}</p>
             </div>
           )}
+          {!caseData.petitioner && !caseData.respondent && caseData.parties && caseData.parties.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground">Parties</p>
+              <p className="text-foreground">{caseData.parties.join(' v. ')}</p>
+            </div>
+          )}
           {caseData.decision_type && (
             <div>
               <p className="text-xs text-muted-foreground">Decision</p>
@@ -343,14 +368,14 @@ export default function CaseViewerPage() {
           <div className="glass rounded-xl p-4 space-y-3">
             <h3 className="font-semibold text-foreground text-sm">Similar Cases</h3>
             {similar.slice(0, 5).map((c) => (
-              <a
+              <Link
                 key={c.case_id}
-                href={`/cases/${c.case_id}`}
+                to={`/cases/${c.case_id}`}
                 className="block text-xs hover:text-primary transition-colors"
               >
                 <p className="font-medium text-foreground">{c.case_name}</p>
                 {c.court && <p className="text-muted-foreground">{c.court}</p>}
-              </a>
+              </Link>
             ))}
           </div>
         )}

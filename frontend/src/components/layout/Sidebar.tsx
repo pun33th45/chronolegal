@@ -4,6 +4,7 @@ import {
   BarChart3,
   BookOpen,
   Bot,
+  FileUp,
   Home,
   LogOut,
   Search,
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
   { to: '/chat', icon: Bot, label: 'Legal AI Chat' },
   { to: '/search', icon: Search, label: 'Search Cases' },
+  { to: '/upload', icon: FileUp, label: 'Upload Judgment' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
 ]
 

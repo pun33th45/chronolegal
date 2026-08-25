@@ -47,7 +47,7 @@ export default function RegisterPage() {
             Start your legal research journey
           </h2>
           <p className="text-white/70 leading-relaxed">
-            Access thousands of Indian legal judgments. Ask questions in plain English.
+            Access landmark Indian legal judgments. Ask questions in plain English.
             Get grounded answers with citations — powered by AI.
           </p>
         </div>

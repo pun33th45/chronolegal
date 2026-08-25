@@ -20,6 +20,65 @@ from app.core.config import settings
 from app.core.redis import cache
 
 
+class LegalBertEmbeddings(Embeddings):
+    """LegalBERT encoder → masked mean pooling → L2-normalized dense vector.
+
+    LegalBERT checkpoints (e.g. law-ai/InLegalBERT) are bare HuggingFace
+    encoders, not sentence-transformers-packaged models — they ship no
+    ``1_Pooling/config.json``, so LangChain's HuggingFaceEmbeddings (which
+    loads models via sentence-transformers) would either fail to load them
+    or silently fall back to raw [CLS] pooling. Pooling is done explicitly
+    here via the attention mask so padding tokens don't skew the average.
+    """
+
+    def __init__(self, model_name: str, device: str = "cpu") -> None:
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+
+        self._torch = torch
+        self._device = device
+        logger.info(f"Loading LegalBERT embedding model: {model_name}")
+        self._tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self._model = AutoModel.from_pretrained(model_name).to(device)
+        self._model.eval()
+
+    def _mean_pool(self, texts: list[str]) -> list[list[float]]:
+        torch = self._torch
+        encoded = self._tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+        ).to(self._device)
+
+        with torch.no_grad():
+            output = self._model(**encoded)
+
+        token_embeddings = output.last_hidden_state
+        mask = (
+            encoded["attention_mask"]
+            .unsqueeze(-1)
+            .expand(token_embeddings.size())
+            .float()
+        )
+        summed = torch.sum(token_embeddings * mask, dim=1)
+        counts = torch.clamp(mask.sum(dim=1), min=1e-9)
+        pooled = summed / counts
+        normalized = torch.nn.functional.normalize(pooled, p=2, dim=1)
+        return normalized.cpu().tolist()
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        batch_size = settings.EMBEDDING_BATCH_SIZE
+        embeddings: list[list[float]] = []
+        for i in range(0, len(texts), batch_size):
+            embeddings.extend(self._mean_pool(texts[i : i + batch_size]))
+        return embeddings
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._mean_pool([text])[0]
+
+
 @lru_cache(maxsize=1)
 def _get_embedding_model() -> Embeddings:
     if settings.EMBEDDING_PROVIDER == "openai":
@@ -31,6 +90,12 @@ def _get_embedding_model() -> Embeddings:
         return OpenAIEmbeddings(  # type: ignore[call-arg]
             model=settings.OPENAI_EMBEDDING_MODEL,
             api_key=settings.OPENAI_API_KEY,  # type: ignore[arg-type]
+        )
+
+    if settings.EMBEDDING_PROVIDER == "legalbert":
+        return LegalBertEmbeddings(
+            model_name=settings.EMBEDDING_MODEL,
+            device=settings.EMBEDDING_DEVICE,
         )
 
     logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")

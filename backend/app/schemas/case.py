@@ -83,6 +83,7 @@ class LegalCaseRead(BaseModel):
     citation_count: int = 0
     chunk_count: int = 0
     is_embedded: bool = False
+    source_file: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

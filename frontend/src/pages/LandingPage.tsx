@@ -6,7 +6,7 @@ const FEATURES = [
   {
     icon: Brain,
     title: 'AI-Powered Legal QA',
-    desc: 'Ask complex legal questions in plain English. Get grounded answers with citations from thousands of real judgments.',
+    desc: 'Ask complex legal questions in plain English. Get grounded answers with citations back to the actual retrieved judgment text.',
   },
   {
     icon: Search,
@@ -20,8 +20,8 @@ const FEATURES = [
   },
   {
     icon: Shield,
-    title: 'Zero Hallucination',
-    desc: 'Every answer is grounded in retrieved documents. If the corpus lacks evidence, the AI tells you — never fabricates.',
+    title: 'Grounded, Not Guessed',
+    desc: 'Every answer is checked against retrieved documents before it is generated. If the corpus lacks evidence, the AI says so instead of guessing.',
   },
   {
     icon: BookOpen,
@@ -78,7 +78,7 @@ export default function LandingPage() {
           >
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs font-medium mb-6">
               <Zap className="w-3 h-3" />
-              Powered by RAG + LLaMA 3.1 + BAAI/bge-large
+              Powered by RAG + Groq + LegalBERT
             </div>
             <h1 className="text-5xl md:text-7xl font-serif font-bold text-foreground leading-tight mb-6">
               Legal Research,{' '}
@@ -86,8 +86,8 @@ export default function LandingPage() {
               by AI
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Search thousands of Indian legal judgments semantically. Ask complex legal questions.
-              Get grounded, cited answers — powered by state-of-the-art AI and the ChronoLegal dataset.
+              Search landmark Indian Supreme Court judgments semantically. Ask complex legal questions.
+              Get grounded, cited answers — every claim traced back to the retrieved judgment text.
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link
@@ -112,10 +112,10 @@ export default function LandingPage() {
       <section className="py-12 border-y border-border">
         <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
-            ['10,000+', 'Legal Judgments'],
-            ['1M+', 'Indexed Passages'],
-            ['50+', 'Indian Courts'],
-            ['Zero', 'Hallucinations'],
+            ['6', 'Landmark Judgments'],
+            ['13', 'Indexed Passages'],
+            ['Real-time', 'Streaming Answers'],
+            ['Grounded', 'Citations Only'],
           ].map(([num, label]) => (
             <div key={label}>
               <p className="text-3xl font-bold gold-text">{num}</p>
@@ -184,7 +184,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-border py-8 px-6 text-center text-sm text-muted-foreground">
         <p>© 2025 ChronoLegal. AI-powered Legal Research Platform.</p>
-        <p className="mt-1 text-xs">Built with LangChain · ChromaDB · BAAI/bge-large · LLaMA 3.1</p>
+        <p className="mt-1 text-xs">Built with LangChain · ChromaDB · LegalBERT · Groq</p>
       </footer>
     </div>
   )

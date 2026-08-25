@@ -164,6 +164,7 @@ export interface LegalCase {
   citation_count: number
   chunk_count: number
   is_embedded: boolean
+  source_file: string | null
   created_at: string
 }
 

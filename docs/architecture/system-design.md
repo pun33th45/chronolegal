@@ -65,7 +65,7 @@ ChronoLegal is a **Retrieval-Augmented Generation (RAG)** platform specialising 
 
 ```
 1. Query Rewriting    — LLM expands abbreviations, adds legal context
-2. Embedding          — BAAI/bge-large-en-v1.5 (1024-dim, normalised)
+2. Embedding          — nlpaueb/legal-bert-base-uncased (768-dim, mean-pooled, normalised)
 3. Vector Search      — ChromaDB cosine similarity, top-50 candidates
 4. Cross-Encoder Rerank — ms-marco-MiniLM-L-6-v2, reranks to top-5
 5. Context Builder    — Concatenates chunk texts + metadata

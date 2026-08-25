@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronUp, ExternalLink, Scale, Calendar, Gavel } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/Badge'
@@ -89,13 +90,13 @@ export function CitationCard({ citation, index, className }: CitationCardProps) 
               )}
 
               {citation.case_id && (
-                <a
-                  href={`/cases/${citation.case_id}`}
+                <Link
+                  to={`/cases/${citation.case_id}`}
                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
                   View full case <ExternalLink className="h-3 w-3" />
-                </a>
+                </Link>
               )}
             </div>
           </motion.div>

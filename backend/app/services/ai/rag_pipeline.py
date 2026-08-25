@@ -112,6 +112,7 @@ class RAGPipeline:
         conversation_history: list[Any] | None = None,
         top_k: int | None = None,
         filters: dict[str, Any] | None = None,
+        case_name: str | None = None,
     ) -> RAGResult:
         start = time.perf_counter()
         top_k = top_k or settings.TOP_K_RERANKED
@@ -131,14 +132,14 @@ class RAGPipeline:
             )
 
         # Step 1: Rewrite query
-        rewritten = await rewrite_query(query)
+        rewritten = await rewrite_query(query, case_name=case_name)
         logger.debug(f"Query rewritten: '{query}' → '{rewritten}'")
 
         # Step 2: Retrieve from vector DB
         chroma_filters = self._build_chroma_filters(filters)
         raw_results = await self.embedder.similarity_search(
             query=rewritten,
-            n_results=settings.TOP_K_RETRIEVAL,
+            n_results=self._retrieval_n_results(filters),
             where=chroma_filters,
         )
 
@@ -253,6 +254,7 @@ class RAGPipeline:
         conversation_history: list[Any] | None = None,
         top_k: int | None = None,
         filters: dict[str, Any] | None = None,
+        case_name: str | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
         _INSUFFICIENT = (
             "The uploaded legal corpus does not contain sufficient "
@@ -260,11 +262,12 @@ class RAGPipeline:
         )
         top_k = top_k or settings.TOP_K_RERANKED
 
-        rewritten = await rewrite_query(query)
+        yield StreamChunk(type="status", content="retrieving")
+        rewritten = await rewrite_query(query, case_name=case_name)
         chroma_filters = self._build_chroma_filters(filters)
         raw_results = await self.embedder.similarity_search(
             query=rewritten,
-            n_results=settings.TOP_K_RETRIEVAL,
+            n_results=self._retrieval_n_results(filters),
             where=chroma_filters,
         )
 
@@ -276,6 +279,7 @@ class RAGPipeline:
             return
 
         # Hybrid fusion then rerank
+        yield StreamChunk(type="status", content="reranking")
         dense_order = list(range(len(documents)))
         fused_order = self._fuse_results(rewritten, documents, dense_order)
         fused_docs = [documents[i] for i in fused_order]
@@ -333,7 +337,19 @@ class RAGPipeline:
         where: dict[str, Any] = {}
         if filters.get("court"):
             where["court"] = {"$eq": filters["court"]}
+        if filters.get("case_id"):
+            where["case_id"] = {"$eq": filters["case_id"]}
         return where if where else None
+
+    @staticmethod
+    def _retrieval_n_results(filters: dict[str, Any] | None) -> int:
+        """A case_id filter already narrows Chroma's search to one
+        judgment's own chunks, so retrieving a wider pre-rerank candidate
+        pool there is cheap and lets the cross-encoder see more of that
+        judgment's real content instead of an arbitrary top-12 cutoff."""
+        if filters and filters.get("case_id"):
+            return settings.TOP_K_RETRIEVAL_SCOPED
+        return settings.TOP_K_RETRIEVAL
 
     @staticmethod
     def _strip_invalid_citations(answer: str, num_docs: int) -> str:

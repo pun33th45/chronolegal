@@ -8,6 +8,7 @@ import RegisterPage from '@/pages/RegisterPage'
 import DashboardPage from '@/pages/DashboardPage'
 import ChatPage from '@/pages/ChatPage'
 import SearchPage from '@/pages/SearchPage'
+import UploadPage from '@/pages/UploadPage'
 import AnalyticsPage from '@/pages/AnalyticsPage'
 import CaseViewerPage from '@/pages/CaseViewerPage'
 import AdminPage from '@/pages/AdminPage'
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="chat" element={<ChatPage />} />
           <Route path="chat/:conversationId" element={<ChatPage />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="upload" element={<UploadPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="cases/:caseId" element={<CaseViewerPage />} />
           <Route path="admin" element={<AdminPage />} />

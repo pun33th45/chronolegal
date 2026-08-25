@@ -17,8 +17,8 @@ flowchart TD
     H --> I[Send to LLM:\nExpand abbreviations\nAdd legal terminology\nClarify ambiguities]
     I --> J[Rewritten Query]
 
-    J --> K[Embedding Generator\nBAAI/bge-large-en-v1.5]
-    K --> L[1024-dim Query Vector]
+    J --> K[Embedding Generator\nnlpaueb/legal-bert-base-uncased]
+    K --> L[768-dim Query Vector]
 
     L --> M[ChromaDB Cosine Search\ntop_k = 50]
     M --> N{Apply metadata filters?\ncourt / year / acts}
@@ -64,7 +64,7 @@ flowchart TD
 
     L --> M[RecursiveChunker\nchunk_size=300 tokens\noverlap=50 tokens]
     M --> N[Batch chunks × 32]
-    N --> O[EmbeddingService\nBAAI/bge-large-en-v1.5\nembed batch]
+    N --> O[EmbeddingService\nnlpaueb/legal-bert-base-uncased\nembed batch]
     O --> P[ChromaDB\nadd_documents\nwith metadata]
     P --> Q[PostgreSQL\nINSERT case_chunks\nUPDATE indexed_at]
     Q --> J
@@ -104,7 +104,7 @@ flowchart TD
     A([POST /search/]) --> B[Validate request schema]
     B --> C{Redis cache hit?}
     C -- Yes --> D([Return cached results\nX-Cache: HIT])
-    C -- No --> E[Embed query\nbge-large-en-v1.5]
+    C -- No --> E[Embed query\nnlpaueb/legal-bert-base-uncased]
 
     E --> F{Filters specified?}
     F -- Yes --> G[ChromaDB query\nwith where clause\ncourt / year / acts]

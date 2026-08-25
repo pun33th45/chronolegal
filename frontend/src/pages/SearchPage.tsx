@@ -48,7 +48,7 @@ export default function SearchPage() {
       <div>
         <h2 className="text-xl font-bold text-foreground mb-1">Search Legal Cases</h2>
         <p className="text-sm text-muted-foreground">
-          Semantic search across thousands of Indian legal judgments
+          Semantic search across landmark Indian legal judgments
         </p>
       </div>
 

@@ -175,6 +175,39 @@ export const adminApi = {
     api.get('/admin/search-logs', { params: { page, page_size } }).then((r) => r.data),
 }
 
+// ─── Documents ────────────────────────────────────────────────────────────────
+export type UploadStatus = {
+  status:
+    | 'queued'
+    | 'extracting'
+    | 'chunking'
+    | 'extracting_entities'
+    | 'embedding'
+    | 'indexing'
+    | 'done'
+    | 'failed'
+  filename: string
+  chunks?: number
+  chunk_count?: number
+  case_id?: string
+  error?: string
+}
+
+export const documentsApi = {
+  upload: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api
+      .post<{ task_id: string; message: string }>('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data)
+  },
+
+  status: (taskId: string) =>
+    api.get<UploadStatus>(`/documents/upload/status/${taskId}`).then((r) => r.data),
+}
+
 // ─── Feedback ─────────────────────────────────────────────────────────────────
 export const feedbackApi = {
   submit: (data: {

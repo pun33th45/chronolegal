@@ -45,8 +45,19 @@ For a **legal** domain, citation accuracy and zero hallucination outweigh speed 
 **Why**: Raw user questions ("what happened in kesavananda?") miss legal terminology. The rewriter expands abbreviations, adds full case names, and injects legal context to improve retrieval precision.
 
 ### 2. Embedding
-**Model**: `BAAI/bge-large-en-v1.5` (1024 dimensions)  
-**Why**: Top performer on BEIR benchmark for legal/long-document retrieval. Better than `all-MiniLM` for domain-specific text. Runs locally via HuggingFace — no external API needed.
+**Model**: `nlpaueb/legal-bert-base-uncased` (768 dimensions) — "LegalBERT", a
+BERT encoder pretrained on legal text (contracts, EU/UK/US legislation, court
+cases). Loaded directly via `transformers` (`AutoModel`/`AutoTokenizer`), not
+sentence-transformers, since LegalBERT checkpoints ship no sentence-transformers
+pooling head: tokenize → transformer encoder → attention-mask-weighted mean
+pooling over token embeddings → L2-normalize (see `LegalBertEmbeddings` in
+`embedding_service.py`).
+**Why**: Domain-pretrained on legal text — better fit for legal judgments than a
+generic sentence-embedding model. Runs locally via HuggingFace — no external API
+needed. (`law-ai/InLegalBERT`, pretrained specifically on Indian court
+judgments, was the first choice for this Indian-law corpus, but its weight file
+failed to download from the HuggingFace Hub in this environment; see the final
+verification report for details.)
 
 ### 3. Vector Search
 **Store**: ChromaDB with cosine similarity  

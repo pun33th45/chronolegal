@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   Bot,
+  CheckCircle2,
   ChevronRight,
   Copy,
   Loader2,
@@ -15,6 +16,7 @@ import {
   ThumbsUp,
   Trash2,
   User,
+  X,
 } from 'lucide-react'
 import { chatApi, feedbackApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
@@ -28,6 +30,19 @@ const SUGGESTED = [
   'Landmark cases on free speech in India.',
 ]
 
+// Real pipeline stages, driven by actual backend signals (not fabricated):
+// "question" the instant a message is sent, "retrieval"/"reranking" from
+// SSE "status" events emitted by RAGPipeline.stream() at those exact points,
+// "answer" once the "citation" event arrives (citations are only sent after
+// reranking + the evidence-threshold gate pass, strictly before any text).
+type PipelineStage = 'question' | 'retrieving' | 'reranking' | 'answering' | null
+const PIPELINE_STEPS: { key: Exclude<PipelineStage, null>; label: string }[] = [
+  { key: 'question', label: 'Question' },
+  { key: 'retrieving', label: 'Retrieval' },
+  { key: 'reranking', label: 'Reranking' },
+  { key: 'answering', label: 'Answer' },
+]
+
 export default function ChatPage() {
   const { conversationId } = useParams()
   const [searchParams] = useSearchParams()
@@ -39,7 +54,25 @@ export default function ChatPage() {
   const [streamingText, setStreamingText] = useState('')
   const [streamingCitations, setStreamingCitations] = useState<Citation[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null)
   const [activeConvId, setActiveConvId] = useState<string | null>(conversationId || null)
+  const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null)
+
+  const [scopedCase, setScopedCase] = useState<{ id: string; name: string } | null>(() => {
+    const id = searchParams.get('case')
+    const name = searchParams.get('name')
+    return id && name ? { id, name } : null
+  })
+
+  // RAG_REQUEST_TIMEOUT_MS: the backend's own real, measured round trip
+  // (query rewrite -> embed -> Chroma retrieve -> rerank -> Groq generate)
+  // is ~20-25s under normal conditions. This bounds the wait generously
+  // above that rather than tuning it tightly, since the fetch() below
+  // previously had no timeout at all -- if the backend ever stalls (e.g.
+  // a stuck embedded-Chroma call), the UI would show "Searching legal
+  // corpus..." forever with no way to recover short of a page reload.
+  const RAG_REQUEST_TIMEOUT_MS = 90_000
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -73,13 +106,20 @@ export default function ChatPage() {
     }
   }, [searchParams, activeConvId])
 
-  async function sendMessage() {
-    if (!input.trim() || isStreaming) return
-    const userMessage = input.trim()
-    setInput('')
+  async function sendMessage(messageOverride?: string) {
+    const userMessage = (messageOverride ?? input).trim()
+    if (!userMessage || isStreaming) return
+    if (!messageOverride) setInput('')
     setIsStreaming(true)
     setStreamingText('')
     setStreamingCitations([])
+    setChatError(null)
+    setLastFailedMessage(null)
+    setPipelineStage('question')
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), RAG_REQUEST_TIMEOUT_MS)
+    let sawAnyChunk = false
 
     try {
       const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
@@ -95,8 +135,21 @@ export default function ChatPage() {
           stream: true,
           top_k: 5,
           include_related_cases: true,
+          filters: scopedCase ? { case_id: scopedCase.id } : undefined,
         }),
+        signal: controller.signal,
       })
+
+      if (!response.ok) {
+        let detail = `Request failed (HTTP ${response.status})`
+        try {
+          const body = await response.json()
+          detail = body.detail ?? detail
+        } catch {
+          // response body wasn't JSON; keep the generic status-based message
+        }
+        throw new Error(detail)
+      }
 
       const reader = response.body!.getReader()
       const decoder = new TextDecoder()
@@ -113,15 +166,26 @@ export default function ChatPage() {
           if (!line.startsWith('data: ')) continue
           try {
             const chunk = JSON.parse(line.slice(6))
-            if (chunk.type === 'text') {
+            sawAnyChunk = true
+            if (chunk.type === 'status') {
+              if (chunk.content === 'retrieving') setPipelineStage('retrieving')
+              else if (chunk.content === 'reranking') setPipelineStage('reranking')
+            } else if (chunk.type === 'text') {
+              setPipelineStage('answering')
               setStreamingText((prev) => prev + (chunk.content || ''))
             } else if (chunk.type === 'citation') {
+              setPipelineStage('answering')
               setStreamingCitations(chunk.citations || [])
             } else if (chunk.type === 'done') {
               if (chunk.conversation_id) convId = chunk.conversation_id
+            } else if (chunk.type === 'error') {
+              throw new Error(chunk.error || 'The assistant reported an error generating a response.')
             }
-          } catch {
-            // Ignore malformed SSE lines
+          } catch (parseErr) {
+            if (parseErr instanceof Error && parseErr.message.startsWith('The assistant')) {
+              throw parseErr
+            }
+            // Otherwise: a malformed SSE line — ignore and keep reading.
           }
         }
       }
@@ -134,11 +198,21 @@ export default function ChatPage() {
       await qc.invalidateQueries({ queryKey: ['conversations'] })
       await refetchConv()
     } catch (err) {
-      console.error('Stream error:', err)
+      const timedOut = controller.signal.aborted && !sawAnyChunk
+      const message = timedOut
+        ? "This is taking longer than expected and was cancelled. The backend may be under load — please try again."
+        : err instanceof Error
+          ? err.message
+          : 'Something went wrong while generating a response.'
+      console.error('Chat request failed:', err)
+      setChatError(message)
+      setLastFailedMessage(userMessage)
     } finally {
+      clearTimeout(timeoutId)
       setIsStreaming(false)
       setStreamingText('')
       setStreamingCitations([])
+      setPipelineStage(null)
     }
   }
 
@@ -201,6 +275,24 @@ export default function ChatPage() {
 
       {/* Chat main */}
       <div className="flex-1 flex flex-col">
+        {scopedCase && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-primary/20 bg-primary/5 text-sm">
+            <span className="text-primary">
+              Researching: <span className="font-medium">{scopedCase.name}</span>
+            </span>
+            <button
+              onClick={() => {
+                setScopedCase(null)
+                navigate('/chat', { replace: true })
+              }}
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+            >
+              <X className="w-3.5 h-3.5" />
+              Clear
+            </button>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {!activeConvId && messages.length === 0 && !isStreaming && (
@@ -210,7 +302,9 @@ export default function ChatPage() {
               </div>
               <h2 className="text-xl font-semibold text-foreground mb-2">ChronoLegal AI</h2>
               <p className="text-muted-foreground mb-8 max-w-sm">
-                Ask any legal question. I'll search thousands of Indian judgments and give you grounded, cited answers.
+                {scopedCase
+                  ? `Ask a question about ${scopedCase.name}. I'll search its indexed passages and give you a grounded, cited answer.`
+                  : "Ask any legal question. I'll search the indexed judgments and give you grounded, cited answers."}
               </p>
               <div className="space-y-2 w-full max-w-md">
                 {SUGGESTED.map((p) => (
@@ -245,10 +339,7 @@ export default function ChatPage() {
                     <span className="typing-cursor" />
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Searching legal corpus...
-                  </div>
+                  <PipelineIndicator stage={pipelineStage} />
                 )}
                 {streamingCitations.length > 0 && (
                   <CitationList citations={streamingCitations} />
@@ -259,6 +350,33 @@ export default function ChatPage() {
 
           <div ref={bottomRef} />
         </div>
+
+        {/* Error state: the previous implementation only console.error'd
+            here, so a real failure (backend down, timeout, Groq error)
+            silently reset the input with no visible explanation. */}
+        {chatError && (
+          <div className="border-t border-destructive/30 bg-destructive/10 px-4 py-3">
+            <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+              <p className="text-sm text-destructive">{chatError}</p>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {lastFailedMessage && (
+                  <button
+                    onClick={() => sendMessage(lastFailedMessage)}
+                    className="text-xs font-medium text-destructive hover:underline"
+                  >
+                    Retry
+                  </button>
+                )}
+                <button
+                  onClick={() => setChatError(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Input */}
         <div className="border-t border-border p-4">
@@ -280,7 +398,7 @@ export default function ChatPage() {
                 }}
               />
               <button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || isStreaming}
                 className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
               >
@@ -297,6 +415,32 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function PipelineIndicator({ stage }: { stage: PipelineStage }) {
+  const order = PIPELINE_STEPS.map((s) => s.key)
+  const currentIdx = stage ? order.indexOf(stage) : 0
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      {PIPELINE_STEPS.map((step, i) => {
+        const state = i < currentIdx ? 'done' : i === currentIdx ? 'active' : 'pending'
+        return (
+          <div key={step.key} className="flex items-center gap-1.5">
+            {state === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-primary" />}
+            {state === 'active' && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
+            {state === 'pending' && <div className="w-3.5 h-3.5 rounded-full border border-border" />}
+            <span className={state === 'pending' ? 'text-muted-foreground' : 'text-foreground'}>
+              {step.label}
+            </span>
+            {i < PIPELINE_STEPS.length - 1 && (
+              <ChevronRight className="w-3 h-3 text-muted-foreground mx-0.5" />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -7,7 +7,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.schemas.chat import ChatRequest, ChatResponse, StreamChunk
 from app.schemas.conversation import (
     ConversationCreate,
@@ -16,9 +16,21 @@ from app.schemas.conversation import (
     ConversationWithMessages,
 )
 from app.services.ai.rag_pipeline import RAGPipeline
+from app.services.legal.case_service import CaseService
 from app.services.legal.conversation_service import ConversationService
 
 router = APIRouter()
+
+
+async def _resolve_case_name(filters: dict | None, db: AsyncSession) -> str | None:
+    """When a question is scoped to one case, look up its real name so the
+    query rewriter has something concrete to substitute for "this case" /
+    "this judgment" instead of inventing a placeholder — real, per-request
+    data, not a hardcoded case name."""
+    if not filters or not filters.get("case_id"):
+        return None
+    case = await CaseService(db).get_by_case_id(filters["case_id"])
+    return case.case_name if case else None
 
 
 @router.post("/", response_model=ChatResponse)
@@ -46,16 +58,22 @@ async def chat(
             ConversationCreate(title="New Conversation"), current_user.id
         )
 
-    # Save user message
+    # Save user message. is_first_message must be read before add_message():
+    # its bulk UPDATE gets synchronized back into this in-memory `conversation`
+    # object, so checking message_count afterwards always sees the
+    # post-increment value.
     history = await conv_svc.get_messages(conversation.id, limit=10)
+    is_first_message = conversation.message_count == 0
     await conv_svc.add_message(conversation.id, role="user", content=payload.message)
 
     # Run RAG pipeline
+    case_name = await _resolve_case_name(payload.filters, db)
     result = await rag.run(
         query=payload.message,
         conversation_history=history,
         top_k=payload.top_k,
         filters=payload.filters,
+        case_name=case_name,
     )
 
     # Save assistant message
@@ -68,7 +86,7 @@ async def chat(
     )
 
     # Auto-title conversation from first message
-    if conversation.message_count == 0:
+    if is_first_message:
         title = payload.message[:80] + ("..." if len(payload.message) > 80 else "")
         await conv_svc.update(
             conversation.id, current_user.id, ConversationUpdate(title=title)
@@ -108,7 +126,15 @@ async def chat_stream(
         )
 
     history = await conv_svc.get_messages(conversation.id, limit=10)
+    # Must read message_count before add_message(): its bulk UPDATE
+    # (`message_count = message_count + 1`) gets synchronized back into this
+    # same in-memory `conversation` object by SQLAlchemy's session-sync
+    # evaluator, so checking afterwards would always see the post-increment
+    # value and never detect "this was the first message".
+    is_first_message = conversation.message_count == 0
+    case_name = await _resolve_case_name(payload.filters, db)
     await conv_svc.add_message(conversation.id, role="user", content=payload.message)
+    await db.commit()
 
     async def event_generator():
         full_answer = ""
@@ -119,6 +145,7 @@ async def chat_stream(
                 conversation_history=history,
                 top_k=payload.top_k,
                 filters=payload.filters,
+                case_name=case_name,
             ):
                 if chunk.type == "text":
                     full_answer += chunk.content or ""
@@ -128,13 +155,32 @@ async def chat_stream(
                 data = chunk.model_dump_json()
                 yield f"data: {data}\n\n"
 
-            # Persist final answer
-            await conv_svc.add_message(
-                conversation_id=conversation.id,
-                role="assistant",
-                content=full_answer,
-                citations=citations,
-            )
+            # Persist final answer using a fresh session: by the time this
+            # generator runs, FastAPI has already torn down the request-scoped
+            # `db` (get_db commits + closes it as soon as the endpoint function
+            # returns the StreamingResponse object, well before the streamed
+            # body — and this generator — actually finish). Writes through the
+            # closed `db` silently never commit instead of raising, which is
+            # what let the assistant's answer vanish from conversation history
+            # on reload without ever surfacing as an error.
+            async with AsyncSessionLocal() as fresh_db:
+                fresh_conv_svc = ConversationService(fresh_db)
+                await fresh_conv_svc.add_message(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=full_answer,
+                    citations=citations,
+                )
+                if is_first_message:
+                    title = payload.message[:80] + (
+                        "..." if len(payload.message) > 80 else ""
+                    )
+                    await fresh_conv_svc.update(
+                        conversation.id,
+                        current_user.id,
+                        ConversationUpdate(title=title),
+                    )
+                await fresh_db.commit()
 
             done_chunk = StreamChunk(
                 type="done",
