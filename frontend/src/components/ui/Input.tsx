@@ -22,7 +22,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className="relative">
           {leftIcon && (
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
               {leftIcon}
             </span>
           )}
@@ -30,7 +30,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={cn(
-              'w-full rounded-lg border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-muted',
+              'w-full rounded-lg border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground',
               'border-border transition-colors',
               'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/60',
               'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -42,13 +42,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {rightIcon && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted">
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
               {rightIcon}
             </span>
           )}
         </div>
         {error && <p className="text-xs text-red-400">{error}</p>}
-        {hint && !error && <p className="text-xs text-muted">{hint}</p>}
+        {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
       </div>
     )
   },

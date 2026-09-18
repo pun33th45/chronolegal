@@ -1,6 +1,16 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, BookOpen, Brain, Scale, Search, Shield, Zap } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, FileCheck, Quote, Scale, Search, Shield, UploadCloud, Zap } from 'lucide-react'
+
+const WORKFLOW = [
+  { icon: UploadCloud, label: 'Upload' },
+  { icon: FileCheck, label: 'Understand' },
+  { icon: Search, label: 'Retrieve' },
+  { icon: Brain, label: 'Answer' },
+  { icon: Quote, label: 'Cite' },
+]
+
+const TECHNOLOGIES = ['LegalBERT', 'ChromaDB', 'PostgreSQL', 'RAG', 'Cross-Encoder Reranking', 'Groq']
 
 const FEATURES = [
   {
@@ -108,20 +118,27 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats */}
+      {/* Workflow */}
       <section className="py-12 border-y border-border">
-        <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-          {[
-            ['6', 'Landmark Judgments'],
-            ['13', 'Indexed Passages'],
-            ['Real-time', 'Streaming Answers'],
-            ['Grounded', 'Citations Only'],
-          ].map(([num, label]) => (
-            <div key={label}>
-              <p className="text-3xl font-bold gold-text">{num}</p>
-              <p className="text-sm text-muted-foreground mt-1">{label}</p>
-            </div>
-          ))}
+        <div className="max-w-5xl mx-auto px-6">
+          <p className="text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-6">
+            How it works
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {WORKFLOW.map((step, i) => (
+              <div key={step.label} className="flex items-center gap-3">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <step.icon className="w-5 h-5 text-primary" />
+                  </div>
+                  <span className="text-xs font-medium text-foreground">{step.label}</span>
+                </div>
+                {i < WORKFLOW.length - 1 && (
+                  <ArrowRight className="w-4 h-4 text-muted-foreground/50 mb-5" />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -183,8 +200,8 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 px-6 text-center text-sm text-muted-foreground">
-        <p>© 2025 ChronoLegal. AI-powered Legal Research Platform.</p>
-        <p className="mt-1 text-xs">Built with LangChain · ChromaDB · LegalBERT · Groq</p>
+        <p>ChronoLegal — an AI-assisted legal research prototype.</p>
+        <p className="mt-1 text-xs">{TECHNOLOGIES.join(' · ')}</p>
       </footer>
     </div>
   )

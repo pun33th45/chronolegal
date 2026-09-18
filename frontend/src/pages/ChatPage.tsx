@@ -22,6 +22,9 @@ import { chatApi, feedbackApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/utils/cn'
 import { CitationCard } from '@/components/chat/CitationCard'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
+import { EmptyState } from '@/components/ui/EmptyState'
 import type { Citation, Message } from '@/types'
 
 const SUGGESTED = [
@@ -58,6 +61,7 @@ export default function ChatPage() {
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null)
   const [activeConvId, setActiveConvId] = useState<string | null>(conversationId || null)
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null)
+  const [convPendingDelete, setConvPendingDelete] = useState<{ id: string; title: string } | null>(null)
 
   const [scopedCase, setScopedCase] = useState<{ id: string; name: string } | null>(() => {
     const id = searchParams.get('case')
@@ -223,7 +227,10 @@ export default function ChatPage() {
     }
   }
 
-  async function deleteConversation(id: string) {
+  async function confirmDeleteConversation() {
+    if (!convPendingDelete) return
+    const { id } = convPendingDelete
+    setConvPendingDelete(null)
     await chatApi.deleteConversation(id)
     if (id === activeConvId) {
       setActiveConvId(null)
@@ -246,39 +253,68 @@ export default function ChatPage() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversations?.map((conv) => (
-            <div
-              key={conv.id}
-              className={cn(
-                'group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors',
-                conv.id === activeConvId
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-              )}
-              onClick={() => {
-                setActiveConvId(conv.id)
-                navigate(`/chat/${conv.id}`)
-              }}
-            >
-              <Bot className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="flex-1 truncate text-xs">{conv.title}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id) }}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+          {conversations && conversations.length > 0 ? (
+            conversations.map((conv) => (
+              <div
+                key={conv.id}
+                className={cn(
+                  'group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors',
+                  conv.id === activeConvId
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+                onClick={() => {
+                  setActiveConvId(conv.id)
+                  navigate(`/chat/${conv.id}`)
+                }}
               >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+                <Bot className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="flex-1 truncate text-xs">{conv.title}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConvPendingDelete({ id: conv.id, title: conv.title }) }}
+                  aria-label={`Delete conversation "${conv.title}"`}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="Start a legal research conversation."
+              description="Ask a question and it appears here."
+              className="py-10"
+            />
+          )}
         </div>
       </aside>
+
+      <Modal
+        open={!!convPendingDelete}
+        onClose={() => setConvPendingDelete(null)}
+        title="Delete conversation?"
+        description={convPendingDelete ? `"${convPendingDelete.title}" will be permanently deleted.` : undefined}
+        size="sm"
+      >
+        <div className="flex justify-end gap-2 mt-2">
+          <Button variant="secondary" size="sm" onClick={() => setConvPendingDelete(null)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" size="sm" onClick={confirmDeleteConversation}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
 
       {/* Chat main */}
       <div className="flex-1 flex flex-col">
         {scopedCase && (
-          <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-primary/20 bg-primary/5 text-sm">
-            <span className="text-primary">
-              Researching: <span className="font-medium">{scopedCase.name}</span>
+          <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-primary/20 bg-primary/5 text-xs">
+            <span className="flex items-center gap-2 text-primary">
+              <span className="uppercase tracking-wider font-semibold text-[10px] px-1.5 py-0.5 rounded bg-primary/15">
+                Case-scoped research
+              </span>
+              <span className="text-sm">{scopedCase.name}</span>
             </span>
             <button
               onClick={() => {
@@ -306,6 +342,9 @@ export default function ChatPage() {
                   ? `Ask a question about ${scopedCase.name}. I'll search its indexed passages and give you a grounded, cited answer.`
                   : "Ask any legal question. I'll search the indexed judgments and give you grounded, cited answers."}
               </p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
+                For example
+              </p>
               <div className="space-y-2 w-full max-w-md">
                 {SUGGESTED.map((p) => (
                   <button
@@ -332,11 +371,14 @@ export default function ChatPage() {
               </div>
               <div className="flex-1">
                 {streamingText ? (
-                  <div className="legal-prose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {streamingText}
-                    </ReactMarkdown>
-                    <span className="typing-cursor" />
+                  <div className="space-y-2">
+                    <PipelineIndicator stage={pipelineStage} collapsed />
+                    <div className="legal-prose">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {streamingText}
+                      </ReactMarkdown>
+                      <span className="typing-cursor" />
+                    </div>
                   </div>
                 ) : (
                   <PipelineIndicator stage={pipelineStage} />
@@ -387,7 +429,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask a legal question... (Enter to send, Shift+Enter for new line)"
+                placeholder="Ask about the facts, reasoning, judgment, statutes, or outcome..."
                 rows={1}
                 className="flex-1 bg-transparent resize-none outline-none text-sm text-foreground placeholder:text-muted-foreground max-h-40 overflow-y-auto"
                 style={{ minHeight: '24px' }}
@@ -410,7 +452,7 @@ export default function ChatPage() {
               </button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Answers grounded in the ChronoLegal corpus. Always verify with official sources.
+              Enter to send, Shift+Enter for a new line. Answers grounded in the ChronoLegal corpus — always verify with official sources.
             </p>
           </div>
         </div>
@@ -419,9 +461,21 @@ export default function ChatPage() {
   )
 }
 
-function PipelineIndicator({ stage }: { stage: PipelineStage }) {
+function PipelineIndicator({ stage, collapsed }: { stage: PipelineStage; collapsed?: boolean }) {
   const order = PIPELINE_STEPS.map((s) => s.key)
   const currentIdx = stage ? order.indexOf(stage) : 0
+
+  // Once the answer starts streaming, the pipeline has necessarily completed
+  // retrieval + reranking (citations are only emitted after that gate) — show
+  // a small, subtle "done" strip instead of the full step-by-step indicator.
+  if (collapsed) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <CheckCircle2 className="w-3 h-3 text-primary" />
+        Retrieval & reranking complete
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center gap-1.5 text-xs">

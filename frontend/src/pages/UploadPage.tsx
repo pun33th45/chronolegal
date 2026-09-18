@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { ArrowRight, CheckCircle2, FileUp, Loader2, XCircle } from 'lucide-react'
-import { documentsApi, type UploadStatus } from '@/services/api'
+import { ArrowRight, CheckCircle2, FileText, FileUp, Loader2, X, XCircle } from 'lucide-react'
+import { casesApi, documentsApi, type UploadStatus } from '@/services/api'
+import { Button } from '@/components/ui/Button'
 
 const STAGES: { key: UploadStatus['status']; emoji: string; label: string }[] = [
   { key: 'extracting', emoji: '📄', label: 'Extracting judgment' },
@@ -25,6 +27,12 @@ function stageState(stageKey: UploadStatus['status'], currentStatus: UploadStatu
   return 'pending'
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -32,6 +40,13 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isDone = status?.status === 'done'
+  const { data: newCase } = useQuery({
+    queryKey: ['case', status?.case_id],
+    queryFn: () => casesApi.get(status!.case_id!),
+    enabled: isDone && !!status?.case_id,
+  })
 
   function stopPolling() {
     if (pollRef.current) {
@@ -80,30 +95,49 @@ export default function UploadPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-foreground mb-1">Upload Judgment</h2>
+        <h2 className="text-xl font-bold text-foreground mb-1">Add a Judgment to the Knowledge Base</h2>
         <p className="text-sm text-muted-foreground">
-          Upload a real judgment (PDF, DOCX, or TXT). It is extracted, chunked, embedded with
-          LegalBERT, and indexed — then immediately searchable in Chat and Search Cases.
+          Upload a legal judgment to extract its structure, identify legal entities, generate
+          LegalBERT embeddings, and make it available for research.
         </p>
       </div>
 
       {!status && (
         <div className="legal-card space-y-4">
-          <label
-            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-12 cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors"
-          >
-            <FileUp className="w-8 h-8 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              {file ? file.name : 'Click to choose a PDF, DOCX, or TXT file'}
-            </span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
+          {!file ? (
+            <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-12 cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors">
+              <FileUp className="w-8 h-8 text-muted-foreground" />
+              <span className="text-sm text-foreground">Click to browse</span>
+              <span className="text-xs text-muted-foreground">PDF, DOC, DOCX, or TXT</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          ) : (
+            <div className="flex items-center gap-3 border border-border rounded-xl p-4">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setFile(null)
+                  if (fileInputRef.current) fileInputRef.current.value = ''
+                }}
+                aria-label="Remove file"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-destructive flex items-center gap-2">
@@ -111,14 +145,9 @@ export default function UploadPage() {
             </p>
           )}
 
-          <button
-            onClick={handleUpload}
-            disabled={!file || uploading}
-            className="w-full py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
+          <Button onClick={handleUpload} disabled={!file || uploading} loading={uploading} className="w-full">
             Process Judgment
-          </button>
+          </Button>
         </div>
       )}
 
@@ -157,23 +186,51 @@ export default function UploadPage() {
 
           {status.status === 'failed' && (
             <p className="text-sm text-destructive flex items-center gap-2">
-              <XCircle className="w-4 h-4" /> {status.error || 'Processing failed'}
+              <XCircle className="w-4 h-4" /> {status.error || 'Unable to process this judgment.'}
             </p>
           )}
 
-          {status.status === 'done' && (
-            <div className="pt-2 space-y-3">
-              <p className="text-sm text-primary">
-                Indexed {status.chunk_count ?? status.chunks} passages successfully.
-              </p>
+          {isDone && (
+            <div className="pt-2 space-y-4 border-t border-border">
+              <p className="text-sm font-medium text-primary pt-4">Judgment successfully added</p>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Case Name</p>
+                  <p className="text-foreground">{newCase?.case_name ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Court</p>
+                  <p className="text-foreground">{newCase?.court ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Date</p>
+                  <p className="text-foreground">{newCase?.judgment_date ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Judges</p>
+                  <p className="text-foreground">
+                    {newCase?.judges && newCase.judges.length > 0 ? newCase.judges.join(', ') : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Chunks Indexed</p>
+                  <p className="text-foreground">{status.chunk_count ?? status.chunks}</p>
+                </div>
+              </div>
+
               {status.case_id && (
-                <Link
-                  to={`/cases/${status.case_id}`}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Research this Judgment
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
+                <div className="flex flex-wrap gap-3">
+                  <Link to={`/chat?case=${status.case_id}&name=${encodeURIComponent(newCase?.case_name ?? status.filename)}`}>
+                    <Button className="gap-2">
+                      Research this Judgment
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <Link to={`/cases/${status.case_id}`}>
+                    <Button variant="secondary">View Case</Button>
+                  </Link>
+                </div>
               )}
             </div>
           )}

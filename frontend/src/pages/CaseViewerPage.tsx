@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { casesApi, summaryApi, nerApi, timelineApi } from '@/services/api'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { cn } from '@/utils/cn'
 import type { SummaryType } from '@/types'
 
@@ -32,7 +34,7 @@ export default function CaseViewerPage() {
   const [activeTab, setActiveTab] = useState<ViewerTab>('judgment')
   const [summaryType, setSummaryType] = useState<SummaryType>('concise')
 
-  const { data: caseData, isLoading } = useQuery({
+  const { data: caseData, isLoading, isError, refetch } = useQuery({
     queryKey: ['case', caseId],
     queryFn: () => casesApi.get(caseId!),
     enabled: !!caseId,
@@ -71,7 +73,23 @@ export default function CaseViewerPage() {
     )
   }
 
-  if (!caseData) return <div className="p-6 text-muted-foreground">Case not found</div>
+  if (isError) {
+    return (
+      <ErrorState
+        description="Unable to retrieve this case from the knowledge base."
+        onRetry={() => refetch()}
+      />
+    )
+  }
+
+  if (!caseData) {
+    return (
+      <EmptyState
+        title="Case not found"
+        description="This case may have been removed, or the link may be incorrect."
+      />
+    )
+  }
 
   return (
     <div className="flex gap-6 p-6 max-w-7xl mx-auto">
@@ -84,59 +102,22 @@ export default function CaseViewerPage() {
           className="glass rounded-xl p-6"
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h1 className="text-xl font-serif font-bold text-foreground mb-3">
+            <h1 className="text-xl font-serif font-bold text-foreground">
               {caseData.case_name}
             </h1>
-            <div className="flex items-center gap-2">
-              {caseData.source_file && (
-                <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary">
-                  <ScanSearch className="w-3.5 h-3.5" />
-                  Auto-extracted via NER
-                </span>
-              )}
-              <Link
-                to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(caseData.case_name)}`}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <BotMessageSquare className="w-3.5 h-3.5" />
-                Research in Chat
-              </Link>
-            </div>
+            <Link
+              to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(caseData.case_name)}`}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0"
+            >
+              <BotMessageSquare className="w-3.5 h-3.5" />
+              Research in Chat
+            </Link>
           </div>
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            {caseData.court && (
-              <div className="flex items-center gap-1.5">
-                <Scale className="w-4 h-4" />
-                {caseData.court}
-              </div>
-            )}
-            {caseData.judgment_date && (
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4" />
-                {caseData.judgment_date}
-              </div>
-            )}
-            {caseData.judges && caseData.judges.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <Gavel className="w-4 h-4" />
-                {caseData.judges.join(', ')}
-              </div>
-            )}
-            {caseData.case_number && (
-              <div className="flex items-center gap-1.5">
-                <FileText className="w-4 h-4" />
-                {caseData.case_number}
-              </div>
-            )}
-          </div>
-
-          {/* Acts */}
-          {caseData.acts && caseData.acts.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              {caseData.acts.map((act) => (
-                <span key={act} className="citation-badge">{act}</span>
-              ))}
-            </div>
+          {caseData.source_file && (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary mt-3">
+              <ScanSearch className="w-3.5 h-3.5" />
+              Auto-extracted via NER
+            </span>
           )}
         </motion.div>
 
@@ -310,63 +291,80 @@ export default function CaseViewerPage() {
 
       {/* Sidebar */}
       <div className="w-72 space-y-4 flex-shrink-0">
-        {/* Metadata card */}
-        <div className="glass rounded-xl p-4 space-y-3 text-sm">
-          <h3 className="font-semibold text-foreground">Case Details</h3>
-          {caseData.petitioner && (
-            <div>
-              <p className="text-xs text-muted-foreground">Petitioner</p>
-              <p className="text-foreground">{caseData.petitioner}</p>
-            </div>
-          )}
-          {caseData.respondent && (
-            <div>
-              <p className="text-xs text-muted-foreground">Respondent</p>
-              <p className="text-foreground">{caseData.respondent}</p>
-            </div>
-          )}
-          {!caseData.petitioner && !caseData.respondent && caseData.parties && caseData.parties.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground">Parties</p>
-              <p className="text-foreground">{caseData.parties.join(' v. ')}</p>
-            </div>
-          )}
+        {/* Case information */}
+        <SidebarSection title="Case Information">
+          <Field label="Court" value={caseData.court} icon={Scale} />
+          <Field label="Date" value={caseData.judgment_date} icon={Calendar} />
+          <Field label="Case Number" value={caseData.case_number} />
           {caseData.decision_type && (
             <div>
               <p className="text-xs text-muted-foreground">Decision</p>
               <span className="citation-badge">{caseData.decision_type}</span>
             </div>
           )}
-          {caseData.text_length && (
-            <div>
-              <p className="text-xs text-muted-foreground">Text Length</p>
-              <p className="text-foreground">{caseData.text_length.toLocaleString()} chars</p>
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-muted-foreground">Chunks Indexed</p>
-            <p className="text-foreground">{caseData.chunk_count}</p>
-          </div>
-        </div>
+        </SidebarSection>
 
-        {/* Sections */}
-        {caseData.sections && caseData.sections.length > 0 && (
-          <div className="glass rounded-xl p-4 space-y-2">
-            <h3 className="font-semibold text-foreground text-sm">Sections</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {caseData.sections.slice(0, 15).map((s) => (
-                <span key={s} className="text-xs px-2 py-0.5 bg-muted rounded text-muted-foreground">
-                  {s}
-                </span>
-              ))}
-            </div>
-          </div>
+        {/* Parties */}
+        {(caseData.petitioner || caseData.respondent || (caseData.parties && caseData.parties.length > 0)) && (
+          <SidebarSection title="Parties">
+            {caseData.petitioner || caseData.respondent ? (
+              <>
+                <Field label="Petitioner" value={caseData.petitioner} />
+                <Field label="Respondent" value={caseData.respondent} />
+              </>
+            ) : (
+              <Field label="Parties" value={caseData.parties?.join(' v. ')} />
+            )}
+          </SidebarSection>
         )}
+
+        {/* Judicial panel */}
+        {caseData.judges && caseData.judges.length > 0 && (
+          <SidebarSection title="Judicial Panel">
+            <Field label="Judges" value={caseData.judges.join(', ')} icon={Gavel} />
+          </SidebarSection>
+        )}
+
+        {/* Legal references */}
+        {((caseData.acts && caseData.acts.length > 0) || (caseData.sections && caseData.sections.length > 0)) && (
+          <SidebarSection title="Legal References">
+            {caseData.acts && caseData.acts.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Acts</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {caseData.acts.map((act) => (
+                    <span key={act} className="citation-badge">{act}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {caseData.sections && caseData.sections.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Sections</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {caseData.sections.slice(0, 15).map((s) => (
+                    <span key={s} className="text-xs px-2 py-0.5 bg-muted rounded text-muted-foreground">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </SidebarSection>
+        )}
+
+        {/* Document */}
+        <SidebarSection title="Document">
+          <Field label="Source File" value={caseData.source_file} icon={FileText} />
+          <Field label="Indexed Chunks" value={caseData.chunk_count} />
+          {caseData.text_length ? (
+            <Field label="Text Length" value={`${caseData.text_length.toLocaleString()} chars`} />
+          ) : null}
+        </SidebarSection>
 
         {/* Similar cases */}
         {similar && similar.length > 0 && (
-          <div className="glass rounded-xl p-4 space-y-3">
-            <h3 className="font-semibold text-foreground text-sm">Similar Cases</h3>
+          <SidebarSection title="Similar Cases">
             {similar.slice(0, 5).map((c) => (
               <Link
                 key={c.case_id}
@@ -377,9 +375,39 @@ export default function CaseViewerPage() {
                 {c.court && <p className="text-muted-foreground">{c.court}</p>}
               </Link>
             ))}
-          </div>
+          </SidebarSection>
         )}
       </div>
+    </div>
+  )
+}
+
+function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="glass rounded-xl p-4 space-y-3 text-sm">
+      <h3 className="font-semibold text-foreground text-xs uppercase tracking-wider">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string
+  value: string | number | null | undefined
+  icon?: React.ElementType
+}) {
+  if (value === null || value === undefined || value === '') return null
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-foreground flex items-center gap-1.5">
+        {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+        {value}
+      </p>
     </div>
   )
 }

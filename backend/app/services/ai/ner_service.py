@@ -13,6 +13,15 @@ class NERService:
 
         try:
             raw = await generate_text(prompt)
+            if not raw.strip():
+                # The reasoning model occasionally spends its whole budget on
+                # internal reasoning and emits no final content. Retrying the
+                # same generation (not asking it to "fix" empty JSON, which
+                # parse_llm_json's stage 3 would otherwise do) resolves this
+                # in practice — confirmed empirically: a second independent
+                # call succeeds after a first empty one.
+                logger.warning("NER generation returned empty content, retrying once")
+                raw = await generate_text(prompt)
             return await parse_llm_json(
                 raw, LegalEntityExtraction, generate_fn=generate_text
             )

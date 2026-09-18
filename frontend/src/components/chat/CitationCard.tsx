@@ -29,10 +29,10 @@ export function CitationCard({ citation, index, className }: CitationCardProps) 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-foreground line-clamp-2">{citation.case_name}</p>
           {citation.citation_text && (
-            <p className="mt-0.5 text-xs text-muted">{citation.citation_text}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{citation.citation_text}</p>
           )}
         </div>
-        <span className="mt-0.5 shrink-0 text-muted">
+        <span className="mt-0.5 shrink-0 text-muted-foreground">
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </span>
       </button>
@@ -46,46 +46,62 @@ export function CitationCard({ citation, index, className }: CitationCardProps) 
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-white/10 px-3 pb-3 pt-2 space-y-2.5">
-              {excerpt && (
-                <blockquote className="text-xs text-foreground/80 italic border-l-2 border-legal-gold/50 pl-3 line-clamp-4">
-                  "{excerpt}"
-                </blockquote>
+            <div className="border-t border-white/10 px-3 pb-3 pt-3 space-y-3">
+              {(citation.court || citation.year || citation.decision_type) && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                    Court
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {citation.court && (
+                      <div className="flex items-center gap-1 text-xs text-foreground/80">
+                        <Scale className="h-3 w-3 text-muted-foreground" />
+                        {citation.court}
+                      </div>
+                    )}
+                    {citation.year && (
+                      <div className="flex items-center gap-1 text-xs text-foreground/80">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        {citation.year}
+                      </div>
+                    )}
+                    {citation.decision_type && (
+                      <div className="flex items-center gap-1 text-xs text-foreground/80">
+                        <Gavel className="h-3 w-3 text-muted-foreground" />
+                        {citation.decision_type}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                {citation.court && (
-                  <div className="flex items-center gap-1 text-xs text-muted">
-                    <Scale className="h-3 w-3" />
-                    {citation.court}
-                  </div>
-                )}
-                {citation.year && (
-                  <div className="flex items-center gap-1 text-xs text-muted">
-                    <Calendar className="h-3 w-3" />
-                    {citation.year}
-                  </div>
-                )}
-                {citation.decision_type && (
-                  <div className="flex items-center gap-1 text-xs text-muted">
-                    <Gavel className="h-3 w-3" />
-                    {citation.decision_type}
-                  </div>
-                )}
-              </div>
-
               {relevanceScore !== undefined && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted">Relevance</span>
-                  <div className="flex-1 h-1 rounded-full bg-white/10">
-                    <div
-                      className="h-1 rounded-full bg-legal-gold/70"
-                      style={{ width: `${Math.round(relevanceScore * 100)}%` }}
-                    />
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                    Relevance
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1 rounded-full bg-white/10">
+                      <div
+                        className="h-1 rounded-full bg-legal-gold/70"
+                        style={{ width: `${Math.round(relevanceScore * 100)}%` }}
+                      />
+                    </div>
+                    <Badge variant="gold" className="text-[10px]">
+                      {Math.round(relevanceScore * 100)}%
+                    </Badge>
                   </div>
-                  <Badge variant="gold" className="text-[10px]">
-                    {Math.round(relevanceScore * 100)}%
-                  </Badge>
+                </div>
+              )}
+
+              {excerpt && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                    Excerpt
+                  </p>
+                  <blockquote className="text-xs text-foreground/80 italic border-l-2 border-legal-gold/50 pl-3 leading-relaxed">
+                    "{excerpt}"
+                  </blockquote>
                 </div>
               )}
 

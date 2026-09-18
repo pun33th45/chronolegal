@@ -247,9 +247,11 @@ export interface AdminStats {
 export type SummaryType = 'concise' | 'detailed' | 'bullet'
 export type SearchType = 'semantic' | 'hybrid' | 'keyword'
 
+export type PipelineStatus = 'retrieving' | 'reranking'
+
 export interface StreamChunk {
-  type: 'text' | 'citation' | 'done' | 'error'
-  content?: string | null
+  type: 'status' | 'text' | 'citation' | 'done' | 'error'
+  content?: string | PipelineStatus | null
   citations?: Citation[] | null
   conversation_id?: string | null
   message_id?: string | null

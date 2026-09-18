@@ -66,7 +66,7 @@ export function Modal({
                       </Dialog.Title>
                     )}
                     {description && (
-                      <Dialog.Description className="mt-1 text-sm text-muted">
+                      <Dialog.Description className="mt-1 text-sm text-muted-foreground">
                         {description}
                       </Dialog.Description>
                     )}
@@ -77,7 +77,7 @@ export function Modal({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="absolute right-4 top-4 text-muted hover:text-foreground"
+                    className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
                     aria-label="Close"
                   >
                     <X className="h-4 w-4" />

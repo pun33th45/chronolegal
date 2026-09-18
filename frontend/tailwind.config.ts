@@ -48,6 +48,11 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // Alias for card — used by components/ui primitives as a neutral panel surface
+        surface: {
+          DEFAULT: 'hsl(var(--card))',
+          hover: 'hsl(var(--accent))',
+        },
         // Legal theme colors
         legal: {
           gold: '#C8A951',

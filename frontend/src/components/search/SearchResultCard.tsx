@@ -37,7 +37,7 @@ export function SearchResultCard({ result, rank, className }: SearchResultCardPr
             )}
           </div>
 
-          <div className="flex flex-wrap gap-3 text-xs text-muted">
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             {result.court && (
               <span className="flex items-center gap-1">
                 <Scale className="h-3 w-3" /> {result.court}
@@ -90,7 +90,7 @@ export function SearchResultCard({ result, rank, className }: SearchResultCardPr
                 className="overflow-hidden"
               >
                 <div className="mt-2 rounded-lg bg-surface-hover p-3">
-                  <p className="text-xs font-medium text-muted mb-1">Summary</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Summary</p>
                   <p className="text-sm text-foreground/80">{result.summary}</p>
                 </div>
               </motion.div>
@@ -102,7 +102,7 @@ export function SearchResultCard({ result, rank, className }: SearchResultCardPr
               variant="ghost"
               size="xs"
               onClick={() => setExpanded((v) => !v)}
-              className="text-muted gap-1"
+              className="text-muted-foreground gap-1"
             >
               {expanded ? (
                 <>

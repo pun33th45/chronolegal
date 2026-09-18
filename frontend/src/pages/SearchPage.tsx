@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Filter, Loader2, Scale, Search } from 'lucide-react'
 import { searchApi } from '@/services/api'
 import { cn } from '@/utils/cn'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { EmptyState } from '@/components/ui/EmptyState'
 import type { SearchFilters, SearchResult } from '@/types'
 
 const SEARCH_TYPES = [
@@ -161,6 +163,14 @@ export default function SearchPage() {
       </form>
 
       {/* Results */}
+      {searchMutation.isError && (
+        <ErrorState
+          variant="banner"
+          description="Unable to search the knowledge base right now."
+          onRetry={() => searchMutation.mutate()}
+        />
+      )}
+
       {searchMutation.data && (
         <div className="space-y-4">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -181,11 +191,11 @@ export default function SearchPage() {
       )}
 
       {searchMutation.data?.results.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <Scale className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p>No results found for "{query}"</p>
-          <p className="text-sm mt-1">Try different keywords or adjust filters</p>
-        </div>
+        <EmptyState
+          icon={<Scale className="w-5 h-5" />}
+          title="No matching judgments found."
+          description={`Nothing matched "${query}". Try different keywords, a broader search type, or fewer filters.`}
+        />
       )}
     </div>
   )

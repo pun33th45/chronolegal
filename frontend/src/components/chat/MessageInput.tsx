@@ -72,7 +72,7 @@ export function MessageInput({
         maxLength={maxLength}
         rows={1}
         className={cn(
-          'w-full resize-none bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted',
+          'w-full resize-none bg-transparent px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground',
           'focus:outline-none',
           'min-h-[52px] max-h-[200px]',
         )}
@@ -84,7 +84,7 @@ export function MessageInput({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="text-muted hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground"
             title="Attach document (coming soon)"
             disabled
           >

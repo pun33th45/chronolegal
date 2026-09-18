@@ -41,7 +41,7 @@ export function FilterPanel({ filters, onChange, onReset }: FilterPanelProps) {
             variant="ghost"
             size="xs"
             onClick={onReset}
-            className="text-muted gap-1 hover:text-foreground"
+            className="text-muted-foreground gap-1 hover:text-foreground"
           >
             <X className="h-3 w-3" /> Reset
           </Button>
