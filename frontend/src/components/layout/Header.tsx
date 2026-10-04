@@ -5,6 +5,7 @@ import { Avatar } from '@/components/ui/Avatar'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/knowledge-base': 'Knowledge Base',
   '/chat': 'Legal AI Chat',
   '/search': 'Search Cases',
   '/upload': 'Upload Judgment',
@@ -39,7 +40,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </button>
         <h1 className="text-sm font-semibold text-foreground">{title}</h1>
       </div>
-      <Avatar name={user?.full_name || user?.username} />
+      <div className="flex items-center gap-2.5">
+        <span className="hidden md:block text-sm text-muted-foreground">
+          {user?.full_name || user?.username}
+        </span>
+        <Avatar name={user?.full_name || user?.username} />
+      </div>
     </header>
   )
 }

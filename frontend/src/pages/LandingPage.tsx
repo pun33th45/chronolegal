@@ -51,12 +51,11 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="fixed top-0 inset-x-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-legal-gradient flex items-center justify-center">
-              <BookOpen className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-serif font-bold text-lg gold-text">ChronoLegal</span>
-          </div>
+          <img
+            src="/chronolegal-logo.png"
+            alt="ChronoLegal — Legal Research Platform"
+            className="h-7 w-auto object-contain"
+          />
           <div className="flex items-center gap-4">
             <Link
               to="/login"

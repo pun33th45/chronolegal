@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, CheckCircle2, FileText, FileUp, Loader2, X, XCircle } from 'lucide-react'
 import { casesApi, documentsApi, type UploadStatus } from '@/services/api'
 import { Button } from '@/components/ui/Button'
+import { PageHeader } from '@/components/ui/PageHeader'
 
 const STAGES: { key: UploadStatus['status']; emoji: string; label: string }[] = [
   { key: 'extracting', emoji: '📄', label: 'Extracting judgment' },
@@ -14,6 +15,13 @@ const STAGES: { key: UploadStatus['status']; emoji: string; label: string }[] = 
   { key: 'indexing', emoji: '🔎', label: 'Indexing into the legal knowledge base' },
   { key: 'done', emoji: '✅', label: 'Ready for research' },
 ]
+
+// 'queued' is a real backend status (set the instant the upload is accepted,
+// before the background task even starts) — it just isn't one of the
+// pipeline stages shown above, since nothing has actually started yet.
+function isQueued(status: UploadStatus['status'] | undefined) {
+  return status === 'queued'
+}
 
 const PIPELINE_STEPS = ['Judgment', 'LegalBERT', 'Vector Search', 'Reranking', 'Groq', 'Cited Answer']
 
@@ -42,7 +50,7 @@ export default function UploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isDone = status?.status === 'done'
-  const { data: newCase } = useQuery({
+  const { data: newCase, isLoading: isLoadingCase } = useQuery({
     queryKey: ['case', status?.case_id],
     queryFn: () => casesApi.get(status!.case_id!),
     enabled: isDone && !!status?.case_id,
@@ -59,27 +67,49 @@ export default function UploadPage() {
     if (!file) return
     setUploading(true)
     setError(null)
-    setStatus(null)
+    // The upload POST itself (auth + file read, before the backend even
+    // accepts the job) can take several seconds — without this, the panel
+    // below stays on the pre-upload file-picker view for that whole time,
+    // the one real gap where nothing visibly happens after clicking.
+    // "queued" is the real status this request is genuinely in transit
+    // toward, not a fabricated one.
+    setStatus({ status: 'queued', filename: file.name })
     try {
       const { task_id } = await documentsApi.upload(file)
-      pollRef.current = setInterval(async () => {
+
+      /** Returns true once processing has reached a terminal state. */
+      async function poll(): Promise<boolean> {
         try {
           const s = await documentsApi.status(task_id)
           setStatus(s)
           if (s.status === 'done' || s.status === 'failed') {
             stopPolling()
             setUploading(false)
+            return true
           }
+          return false
         } catch {
           stopPolling()
           setUploading(false)
           setError('Lost connection while checking processing status.')
+          return true
         }
-      }, 2000)
+      }
+
+      // Poll once immediately (the backend already has a real "queued"
+      // status waiting) instead of leaving the user looking at nothing for
+      // up to 2 seconds until the first interval tick. Only start the
+      // repeating poll if that first check didn't already finish — a tiny
+      // document can complete before this line runs.
+      const finished = await poll()
+      if (!finished) {
+        pollRef.current = setInterval(poll, 2000)
+      }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(detail || 'Upload failed')
       setUploading(false)
+      setStatus(null)
     }
   }
 
@@ -93,14 +123,12 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-foreground mb-1">Add a Judgment to the Knowledge Base</h2>
-        <p className="text-sm text-muted-foreground">
-          Upload a legal judgment to extract its structure, identify legal entities, generate
-          LegalBERT embeddings, and make it available for research.
-        </p>
-      </div>
+    <div className="p-6 md:p-8 max-w-2xl mx-auto space-y-6">
+      <PageHeader
+        eyebrow="Documents"
+        title="Add a Judgment"
+        description="Upload a legal judgment to extract its structure, identify legal entities, generate LegalBERT embeddings, and make it available for research."
+      />
 
       {!status && (
         <div className="legal-card space-y-4">
@@ -159,6 +187,19 @@ export default function UploadPage() {
         >
           <p className="text-sm font-medium text-foreground">{status.filename}</p>
 
+          {error && (
+            <p className="text-sm text-destructive flex items-center gap-2">
+              <XCircle className="w-4 h-4" /> {error}
+            </p>
+          )}
+
+          {isQueued(status.status) && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Uploading judgment...
+            </p>
+          )}
+
           <div className="space-y-3">
             {STAGES.map((stage) => {
               const state = stageState(stage.key, status.status)
@@ -194,6 +235,12 @@ export default function UploadPage() {
             <div className="pt-2 space-y-4 border-t border-border">
               <p className="text-sm font-medium text-primary pt-4">Judgment successfully added</p>
 
+              {isLoadingCase ? (
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Finalizing case details...
+                </p>
+              ) : (
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">Case Name</p>
@@ -218,6 +265,7 @@ export default function UploadPage() {
                   <p className="text-foreground">{status.chunk_count ?? status.chunks}</p>
                 </div>
               </div>
+              )}
 
               {status.case_id && (
                 <div className="flex flex-wrap gap-3">
@@ -235,7 +283,7 @@ export default function UploadPage() {
             </div>
           )}
 
-          {(status.status === 'done' || status.status === 'failed') && (
+          {(status.status === 'done' || status.status === 'failed' || !!error) && (
             <button
               onClick={reset}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"

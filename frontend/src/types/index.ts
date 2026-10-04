@@ -179,6 +179,20 @@ export interface LegalCaseSummary {
   decision_type: string | null
   summary: string | null
   citation_count: number
+  chunk_count: number
+  is_embedded: boolean
+  source_file: string | null
+  created_at: string
+}
+
+export interface CaseChunk {
+  id: string
+  chunk_index: number
+  content: string
+  page_number: number | null
+  start_char: number | null
+  end_char: number | null
+  chroma_id: string | null
 }
 
 export interface SimilarCaseResult {

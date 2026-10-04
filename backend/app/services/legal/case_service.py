@@ -75,6 +75,8 @@ class CaseService:
         date_from: date | None = None,
         date_to: date | None = None,
         act: str | None = None,
+        q: str | None = None,
+        sort_by: str | None = None,
     ) -> list[LegalCase]:
         query = select(LegalCase)
         if court:
@@ -91,23 +93,75 @@ class CaseService:
             # correct against real PostgreSQL by
             # tests/integration/test_array_queries.py.
             query = query.where(LegalCase.acts.any(act))  # type: ignore[arg-type]
+        if q:
+            # Simple case-insensitive substring match — the Knowledge Base
+            # page's "search judgments" box. Deliberately not routed through
+            # SearchService's semantic/BM25 pipeline, which answers a
+            # different question ("what's relevant to this query") than
+            # what this needs ("find the judgment named roughly this").
+            query = query.where(LegalCase.case_name.ilike(f"%{q}%"))
+
+        # sort_by is additive and optional: omitting it keeps every existing
+        # caller's behavior (judgment_date desc) unchanged.
+        if sort_by == "name":
+            query = query.order_by(LegalCase.case_name.asc())
+        elif sort_by == "chunks":
+            query = query.order_by(LegalCase.chunk_count.desc())
+        elif sort_by == "recent":
+            query = query.order_by(LegalCase.created_at.desc())
+        else:
+            query = query.order_by(LegalCase.judgment_date.desc())
 
         offset = (page - 1) * page_size
-        query = (
-            query.order_by(LegalCase.judgment_date.desc())
-            .offset(offset)
-            .limit(page_size)
-        )
+        query = query.offset(offset).limit(page_size)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_chunks(self, case_db_id: uuid.UUID) -> list[CaseChunk]:
+    async def count_cases(
+        self,
+        court: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        act: str | None = None,
+        q: str | None = None,
+    ) -> int:
+        query = select(func.count(LegalCase.id))
+        if court:
+            query = query.where(LegalCase.court == court)
+        if date_from:
+            query = query.where(LegalCase.judgment_date >= date_from)
+        if date_to:
+            query = query.where(LegalCase.judgment_date <= date_to)
+        if act:
+            query = query.where(LegalCase.acts.any(act))  # type: ignore[arg-type]
+        if q:
+            query = query.where(LegalCase.case_name.ilike(f"%{q}%"))
+        result = await self.db.execute(query)
+        return result.scalar_one() or 0
+
+    async def get_chunks(
+        self,
+        case_db_id: uuid.UUID,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> list[CaseChunk]:
+        offset = (page - 1) * page_size
         result = await self.db.execute(
             select(CaseChunk)
             .where(CaseChunk.case_id == case_db_id)
             .order_by(CaseChunk.chunk_index)
+            .offset(offset)
+            .limit(page_size)
         )
         return list(result.scalars().all())
+
+    async def delete_case(self, case: LegalCase) -> None:
+        """Deletes the LegalCase row; the DB-level ON DELETE CASCADE on
+        CaseChunk.case_id (see app/models/case.py) removes its chunks in
+        the same statement. Callers are responsible for deleting the
+        corresponding Chroma vectors separately — see the delete endpoint
+        in app/api/v1/endpoints/cases.py for why that must happen first."""
+        await self.db.delete(case)
 
     async def get_unembedded(self, limit: int = 1000) -> list[LegalCase]:
         result = await self.db.execute(

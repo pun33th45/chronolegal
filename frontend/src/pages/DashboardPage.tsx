@@ -1,20 +1,30 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Bot, FileUp, Gavel, Layers, Scale, Search } from 'lucide-react'
+import {
+  ArrowRight,
+  BarChart3,
+  ChevronRight,
+  FileText,
+  FileUp,
+  Gavel,
+  Layers,
+  Scale,
+  Search,
+} from 'lucide-react'
 import { analyticsApi, casesApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { MetricCard, MetricCardSkeleton } from '@/components/ui/MetricCard'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
 
-const SUGGESTED_PROMPTS = [
-  'What are the fundamental rights guaranteed by the Indian Constitution?',
-  'Explain the doctrine of promissory estoppel in Indian contract law.',
-  'What happened in the Kesavananda Bharati case?',
-  'Landmark judgments on Article 21 right to life.',
-  'How does the Supreme Court interpret preventive detention laws?',
+const RESEARCH_STARTERS = [
+  'What happened in Kesavananda Bharati v. State of Kerala?',
+  'Explain the doctrine of basic structure.',
+  'What are the fundamental rights guaranteed under Article 21?',
+  'Compare the reasoning across your indexed judgments on preventive detention.',
 ]
 
 export default function DashboardPage() {
@@ -32,60 +42,55 @@ export default function DashboardPage() {
 
   const { data: recentCases, isLoading: casesLoading } = useQuery({
     queryKey: ['cases', 'recent'],
-    queryFn: () => casesApi.list({ page_size: 4 }),
+    queryFn: () => casesApi.list({ page_size: 5, sort_by: 'recent' }),
   })
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = user?.full_name?.split(' ')[0] || user?.username
 
-  const stats = analytics
+  const metrics = analytics
     ? [
-        { label: 'Indexed Cases', value: analytics.total_cases.toLocaleString(), icon: Scale },
+        { label: 'Indexed Judgments', value: analytics.total_cases.toLocaleString(), icon: Scale },
         { label: 'Indexed Chunks', value: analytics.total_embeddings.toLocaleString(), icon: Layers },
-        { label: 'Available Courts', value: analytics.top_courts.length.toLocaleString(), icon: Gavel },
-        { label: 'Total Searches', value: analytics.total_searches.toLocaleString(), icon: Search },
+        { label: 'Courts', value: analytics.top_courts.length.toLocaleString(), icon: Gavel },
+        { label: 'Research Queries', value: analytics.total_searches.toLocaleString(), icon: Search },
       ]
     : []
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
-      {/* Welcome */}
+    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-10">
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="space-y-4"
+        transition={{ duration: 0.35 }}
       >
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">
-            {greeting}, {user?.full_name?.split(' ')[0] || user?.username}
-          </h2>
-          <p className="text-muted-foreground mt-1 max-w-2xl">
-            Upload a judgment, build a searchable legal knowledge base, and ask questions backed by
-            retrieved evidence.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link to="/upload">
-            <Button size="lg" className="gap-2">
-              <FileUp className="w-4 h-4" />
-              Upload Judgment
-            </Button>
-          </Link>
-          <Link to="/search">
-            <Button size="lg" variant="secondary" className="gap-2">
-              <Search className="w-4 h-4" />
-              Research Cases
-            </Button>
-          </Link>
-        </div>
+        <PageHeader
+          eyebrow="Legal Research Workspace"
+          title={`${greeting}, ${firstName}`}
+          description="Search your indexed judgments, upload new cases, and generate evidence-backed legal answers."
+          actions={
+            <>
+              <Link to="/upload">
+                <Button size="lg" className="gap-2">
+                  <FileUp className="w-4 h-4" />
+                  Upload Judgment
+                </Button>
+              </Link>
+              <Link to="/search">
+                <Button size="lg" variant="secondary" className="gap-2">
+                  <Search className="w-4 h-4" />
+                  Search Knowledge Base
+                </Button>
+              </Link>
+            </>
+          }
+        />
       </motion.div>
 
       {/* Knowledge base overview */}
       <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-          Knowledge Base
-        </h3>
+        <SectionLabel>Knowledge Base Overview</SectionLabel>
         {analyticsError ? (
           <ErrorState
             variant="banner"
@@ -93,51 +98,67 @@ export default function DashboardPage() {
             onRetry={() => refetchAnalytics()}
           />
         ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
-          >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {analyticsLoading
-              ? Array(4)
-                  .fill(0)
-                  .map((_, i) => <Skeleton key={i} className="h-[76px] rounded-xl" />)
-              : stats.map((stat) => (
-                  <div key={stat.label} className="glass rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-muted-foreground">{stat.label}</p>
-                      <stat.icon className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <p className="text-xl font-bold text-foreground">{stat.value}</p>
-                  </div>
+              ? Array(4).fill(0).map((_, i) => <MetricCardSkeleton key={i} />)
+              : metrics.map((m) => (
+                  <MetricCard key={m.label} icon={m.icon} label={m.label} value={m.value} />
                 ))}
-          </motion.div>
+          </div>
         )}
       </div>
 
-      {/* Recent cases */}
+      {/* Recent judgments */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Recent Cases
-          </h3>
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <SectionLabel className="mb-0.5">Recent Judgments</SectionLabel>
+            <p className="text-xs text-muted-foreground">Recently indexed legal documents</p>
+          </div>
+          <Link
+            to="/knowledge-base"
+            className="text-xs font-medium text-primary hover:underline flex items-center gap-1 flex-shrink-0"
+          >
+            View all
+            <ChevronRight className="w-3 h-3" />
+          </Link>
         </div>
+
         {casesLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Array(2)
-              .fill(0)
-              .map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
+            {Array(3).fill(0).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-4">
+                <div className="skeleton h-8 w-8 rounded-lg flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton h-3.5 w-1/3 rounded" />
+                  <div className="skeleton h-3 w-1/4 rounded" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : recentCases && recentCases.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-xl border border-border divide-y divide-border overflow-hidden bg-card">
             {recentCases.map((c) => (
-              <Link key={c.case_id} to={`/cases/${c.case_id}`} className="legal-card block">
-                <p className="font-medium text-foreground line-clamp-1">{c.case_name}</p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
-                  {c.court && <span>{c.court}</span>}
-                  {c.judgment_date && <span>{c.judgment_date}</span>}
+              <Link
+                key={c.case_id}
+                to={`/cases/${c.case_id}`}
+                className="flex items-center gap-3 p-4 hover:bg-accent/50 transition-colors group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-3.5 h-3.5 text-primary" />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-serif font-medium text-foreground truncate">{c.case_name}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
+                    {c.court && <span>{c.court}</span>}
+                    {c.judgment_date && <span>{c.judgment_date}</span>}
+                    <span>{c.chunk_count} chunks</span>
+                  </div>
+                </div>
+                <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0">
+                  View Case
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </span>
               </Link>
             ))}
           </div>
@@ -155,32 +176,41 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Suggested prompts */}
+      {/* Research starters */}
       <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-          Suggested Questions
-        </h3>
-        <div className="space-y-2">
-          {SUGGESTED_PROMPTS.map((prompt) => (
+        <SectionLabel className="mb-0.5">Research Starters</SectionLabel>
+        <p className="text-xs text-muted-foreground mb-3">
+          Jump into a research question about your indexed judgments
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          {RESEARCH_STARTERS.map((prompt) => (
             <Link
               key={prompt}
               to={`/chat?q=${encodeURIComponent(prompt)}`}
-              className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group"
+              className="flex items-center gap-3 p-3.5 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-accent/40 transition-all group"
             >
-              <Bot className="w-4 h-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
-              <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                {prompt}
-              </span>
+              <span className="text-sm text-foreground/90 flex-1 leading-snug">{prompt}</span>
+              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
             </Link>
           ))}
         </div>
       </div>
 
-      {/* Secondary link */}
-      <Link to="/analytics" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
+      <Link
+        to="/analytics"
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+      >
         <BarChart3 className="w-4 h-4" />
         View corpus analytics & trends
       </Link>
     </div>
+  )
+}
+
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <p className={`text-xs font-semibold text-muted-foreground uppercase tracking-wider ${className ?? ''}`}>
+      {children}
+    </p>
   )
 }

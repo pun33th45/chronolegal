@@ -2,10 +2,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart3,
-  BookOpen,
   Bot,
   FileUp,
   Home,
+  Library,
   LogOut,
   Search,
   Settings,
@@ -16,12 +16,24 @@ import { cn } from '@/utils/cn'
 import { useAuthStore } from '@/store/authStore'
 import { Avatar } from '@/components/ui/Avatar'
 
-const NAV_ITEMS = [
-  { to: '/dashboard', icon: Home, label: 'Dashboard' },
-  { to: '/chat', icon: Bot, label: 'Legal AI Chat' },
-  { to: '/search', icon: Search, label: 'Search Cases' },
-  { to: '/upload', icon: FileUp, label: 'Upload Judgment' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+const NAV_GROUPS = [
+  {
+    label: 'Research',
+    items: [
+      { to: '/dashboard', icon: Home, label: 'Dashboard' },
+      { to: '/knowledge-base', icon: Library, label: 'Knowledge Base' },
+      { to: '/chat', icon: Bot, label: 'Legal AI Chat' },
+      { to: '/search', icon: Search, label: 'Search Cases' },
+    ],
+  },
+  {
+    label: 'Documents',
+    items: [{ to: '/upload', icon: FileUp, label: 'Upload Judgment' }],
+  },
+  {
+    label: 'Insights',
+    items: [{ to: '/analytics', icon: BarChart3, label: 'Analytics' }],
+  },
 ]
 
 const BOTTOM_ITEMS = [
@@ -61,48 +73,66 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          'flex flex-col w-64 flex-shrink-0 bg-card border-r border-border',
+          'flex flex-col w-60 flex-shrink-0 bg-card border-r border-border',
           'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out',
           'md:static md:z-auto md:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        {/* Logo */}
-        <div className="p-6 border-b border-border">
-          <Link to="/dashboard" className="flex items-center gap-3" onClick={onClose}>
-            <div className="w-9 h-9 rounded-lg bg-legal-gradient flex items-center justify-center flex-shrink-0">
-              <BookOpen className="w-5 h-5 text-white" />
-            </div>
+        {/* Logo — the sidebar is too narrow for the full horizontal
+            lockup, so just the icon mark is used, paired with a compact
+            text wordmark (same treatment as before, new asset). */}
+        <div className="px-5 py-5 border-b border-border">
+          <Link to="/dashboard" className="flex items-center gap-2.5" onClick={onClose}>
+            <img
+              src="/chronolegal-mark.png"
+              alt="ChronoLegal"
+              className="w-8 h-8 flex-shrink-0 object-contain"
+            />
             <div>
-              <p className="font-serif font-bold text-base gold-text">ChronoLegal</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                Legal AI Platform
+              <p className="font-serif font-bold text-[15px] leading-tight gold-text">ChronoLegal</p>
+              <p className="text-[9px] text-muted-foreground uppercase tracking-wider leading-tight">
+                Legal Research Platform
               </p>
             </div>
           </Link>
         </div>
 
         {/* Main nav */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
-          {NAV_ITEMS.map((item) => (
-            <NavItem
-              key={item.to}
-              to={item.to}
-              icon={item.icon}
-              label={item.label}
-              active={location.pathname.startsWith(item.to)}
-              onClick={onClose}
-            />
+        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto no-scrollbar">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <NavItem
+                    key={item.to}
+                    to={item.to}
+                    icon={item.icon}
+                    label={item.label}
+                    active={location.pathname.startsWith(item.to)}
+                    onClick={onClose}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
 
           {user?.is_admin && (
-            <NavItem
-              to="/admin"
-              icon={Shield}
-              label="Admin"
-              active={location.pathname.startsWith('/admin')}
-              onClick={onClose}
-            />
+            <div>
+              <p className="px-3 mb-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                Admin
+              </p>
+              <NavItem
+                to="/admin"
+                icon={Shield}
+                label="Admin Panel"
+                active={location.pathname.startsWith('/admin')}
+                onClick={onClose}
+              />
+            </div>
           )}
         </nav>
 

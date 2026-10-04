@@ -1,0 +1,16 @@
+# Keep local-only files out of the image build context. Without this, a local
+# `docker build ./backend` copies the virtualenv, local model weights, local
+# Chroma data and backend/.env (real secrets) into the image via `COPY . .`.
+.env
+.env.*
+.venv/
+venv/
+.model_cache/
+chroma_data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

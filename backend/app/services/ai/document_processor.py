@@ -94,19 +94,13 @@ class DocumentProcessor:
             }
             ner_service = NERService()
             entities = await ner_service.extract(text)
-            if not any(
-                [
-                    entities.judges,
-                    entities.courts,
-                    entities.acts,
-                    entities.sections,
-                    entities.parties,
-                ]
-            ):
-                # A single fully-empty result is more likely a transient LLM
-                # hiccup (rate limit, truncated JSON) than a genuinely
-                # entity-free judgment — retry once before accepting it.
-                entities = await ner_service.extract(text)
+            # NERService.extract() already retries internally if the LLM
+            # returns a genuinely blank response (the actual transient-hiccup
+            # case this used to guard against) — a second outer retry here
+            # just doubled worst-case NER latency (up to 4 sequential Groq
+            # calls) without meaningfully improving accuracy, since a fully
+            # empty *parsed* result after that internal retry usually means
+            # the judgment really has nothing extractable, not a fluke.
             court = entities.courts[0] if entities.courts else "Uploaded Document"
             raw_date = entities.dates[0] if entities.dates else None
             judgment_date = None

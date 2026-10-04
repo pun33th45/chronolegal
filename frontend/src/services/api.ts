@@ -3,6 +3,7 @@ import { useAuthStore } from '@/store/authStore'
 import type {
   AdminStats,
   AnalyticsDashboard,
+  CaseChunk,
   ChatRequest,
   ChatResponse,
   Conversation,
@@ -18,7 +19,20 @@ import type {
   User,
 } from '@/types'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+// VITE_API_URL is the backend's public origin (e.g. the Render service URL);
+// "/api/v1" is appended unless already present. VITE_API_BASE_URL is the
+// older name still passed by the Docker/CI build path. The localhost default
+// is gated on DEV so it can never be baked into a production bundle — the
+// production build itself fails without one of these set (vite.config.ts).
+function resolveApiBaseUrl(): string {
+  const configured = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '')
+    .trim()
+    .replace(/\/+$/, '')
+  if (!configured) return import.meta.env.DEV ? 'http://localhost:8000/api/v1' : '/api/v1'
+  return configured.endsWith('/api/v1') ? configured : `${configured}/api/v1`
+}
+
+export const BASE_URL = resolveApiBaseUrl()
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -112,7 +126,12 @@ export const searchApi = {
   suggestions: (q: string, limit = 5) =>
     api.get<string[]>('/search/suggestions', { params: { q, limit } }).then((r) => r.data),
 
-  filters: () => api.get('/search/filters').then((r) => r.data),
+  filters: () =>
+    api
+      .get<{ courts: string[]; judges: string[]; acts: string[]; decision_types: string[] }>(
+        '/search/filters',
+      )
+      .then((r) => r.data),
 }
 
 // ─── Cases ────────────────────────────────────────────────────────────────────
@@ -120,11 +139,21 @@ export const casesApi = {
   list: (params?: Record<string, unknown>) =>
     api.get<LegalCaseSummary[]>('/cases/', { params }).then((r) => r.data),
 
+  count: (params?: Record<string, unknown>) =>
+    api.get<{ total: number }>('/cases/count', { params }).then((r) => r.data.total),
+
   get: (caseId: string) =>
     api.get<LegalCase>(`/cases/${caseId}`).then((r) => r.data),
 
+  getChunks: (caseId: string, page = 1, page_size = 20) =>
+    api
+      .get<CaseChunk[]>(`/cases/${caseId}/chunks`, { params: { page, page_size } })
+      .then((r) => r.data),
+
   getSimilar: (caseId: string, top_k = 5) =>
     api.get<SimilarCaseResult[]>(`/cases/${caseId}/similar`, { params: { top_k } }).then((r) => r.data),
+
+  delete: (caseId: string) => api.delete(`/cases/${caseId}`),
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────

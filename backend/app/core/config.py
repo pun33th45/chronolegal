@@ -136,6 +136,14 @@ class Settings(BaseSettings):
     # content — unsuitable here). Groq's hosted-model lineup changes over
     # time; confirm this is still current before relying on live inference.
     GROQ_MODEL: str = "openai/gpt-oss-20b"
+    # gpt-oss is a reasoning model: before answering it writes an internal
+    # chain-of-thought that Groq bills and times like regular output tokens,
+    # and defaults to "medium" effort when unset. That reasoning pass (not
+    # retrieval) is what was making even single-digit-chunk queries take
+    # 15-40+ seconds. "low" cuts that internal reasoning pass down
+    # drastically for straightforward QA/extraction prompts like these,
+    # without changing the model or any RAG pipeline logic.
+    GROQ_REASONING_EFFORT: Literal["low", "medium", "high"] = "low"
 
     # Embeddings
     # "huggingface": load EMBEDDING_MODEL locally via sentence-transformers

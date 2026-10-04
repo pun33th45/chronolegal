@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import toast from 'react-hot-toast'
 import {
   Bot,
   CheckCircle2,
   ChevronRight,
   Copy,
+  History,
   Loader2,
   Plus,
   Send,
@@ -18,7 +20,7 @@ import {
   User,
   X,
 } from 'lucide-react'
-import { chatApi, feedbackApi } from '@/services/api'
+import { BASE_URL, chatApi, feedbackApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/utils/cn'
 import { CitationCard } from '@/components/chat/CitationCard'
@@ -40,10 +42,10 @@ const SUGGESTED = [
 // reranking + the evidence-threshold gate pass, strictly before any text).
 type PipelineStage = 'question' | 'retrieving' | 'reranking' | 'answering' | null
 const PIPELINE_STEPS: { key: Exclude<PipelineStage, null>; label: string }[] = [
-  { key: 'question', label: 'Question' },
-  { key: 'retrieving', label: 'Retrieval' },
-  { key: 'reranking', label: 'Reranking' },
-  { key: 'answering', label: 'Answer' },
+  { key: 'question', label: 'Understanding question' },
+  { key: 'retrieving', label: 'Retrieving passages' },
+  { key: 'reranking', label: 'Reranking evidence' },
+  { key: 'answering', label: 'Generating answer' },
 ]
 
 export default function ChatPage() {
@@ -62,6 +64,16 @@ export default function ChatPage() {
   const [activeConvId, setActiveConvId] = useState<string | null>(conversationId || null)
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>(null)
   const [convPendingDelete, setConvPendingDelete] = useState<{ id: string; title: string } | null>(null)
+  const [isDeletingConv, setIsDeletingConv] = useState(false)
+  // Echoed immediately on send so the user's own question never disappears
+  // while the real backend round trip (query rewrite, retrieval, rerank,
+  // Groq) is in flight — it's replaced by the persisted copy once
+  // refetchConv() runs, not a substitute for real data.
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
+  // The conversation-history panel has nowhere to go on a narrow screen
+  // (it previously had no responsive behavior at all, squeezing the whole
+  // chat into a cramped column) — below md it becomes a drawer instead.
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const [scopedCase, setScopedCase] = useState<{ id: string; name: string } | null>(() => {
     const id = searchParams.get('case')
@@ -120,13 +132,13 @@ export default function ChatPage() {
     setChatError(null)
     setLastFailedMessage(null)
     setPipelineStage('question')
+    setPendingUserMessage(userMessage)
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), RAG_REQUEST_TIMEOUT_MS)
     let sawAnyChunk = false
 
     try {
-      const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
       const response = await fetch(`${BASE_URL}/chat/stream`, {
         method: 'POST',
         headers: {
@@ -168,28 +180,31 @@ export default function ChatPage() {
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
+          // JSON.parse is the only step allowed to fail silently here (a
+          // genuinely malformed SSE line) — chunk handling is deliberately
+          // outside this try so a backend `type: "error"` chunk always
+          // propagates to the outer catch instead of being mistaken for a
+          // parse failure and swallowed.
+          let chunk: { type?: string; content?: string; citations?: unknown; conversation_id?: string; error?: string }
           try {
-            const chunk = JSON.parse(line.slice(6))
-            sawAnyChunk = true
-            if (chunk.type === 'status') {
-              if (chunk.content === 'retrieving') setPipelineStage('retrieving')
-              else if (chunk.content === 'reranking') setPipelineStage('reranking')
-            } else if (chunk.type === 'text') {
-              setPipelineStage('answering')
-              setStreamingText((prev) => prev + (chunk.content || ''))
-            } else if (chunk.type === 'citation') {
-              setPipelineStage('answering')
-              setStreamingCitations(chunk.citations || [])
-            } else if (chunk.type === 'done') {
-              if (chunk.conversation_id) convId = chunk.conversation_id
-            } else if (chunk.type === 'error') {
-              throw new Error(chunk.error || 'The assistant reported an error generating a response.')
-            }
-          } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message.startsWith('The assistant')) {
-              throw parseErr
-            }
-            // Otherwise: a malformed SSE line — ignore and keep reading.
+            chunk = JSON.parse(line.slice(6))
+          } catch {
+            continue
+          }
+          sawAnyChunk = true
+          if (chunk.type === 'status') {
+            if (chunk.content === 'retrieving') setPipelineStage('retrieving')
+            else if (chunk.content === 'reranking') setPipelineStage('reranking')
+          } else if (chunk.type === 'text') {
+            setPipelineStage('answering')
+            setStreamingText((prev) => prev + (chunk.content || ''))
+          } else if (chunk.type === 'citation') {
+            setPipelineStage('answering')
+            setStreamingCitations((chunk.citations as typeof streamingCitations) || [])
+          } else if (chunk.type === 'done') {
+            if (chunk.conversation_id) convId = chunk.conversation_id
+          } else if (chunk.type === 'error') {
+            throw new Error(chunk.error || 'The assistant reported an error generating a response.')
           }
         }
       }
@@ -217,6 +232,7 @@ export default function ChatPage() {
       setStreamingText('')
       setStreamingCitations([])
       setPipelineStage(null)
+      setPendingUserMessage(null)
     }
   }
 
@@ -228,52 +244,96 @@ export default function ChatPage() {
   }
 
   async function confirmDeleteConversation() {
-    if (!convPendingDelete) return
+    if (!convPendingDelete || isDeletingConv) return
     const { id } = convPendingDelete
-    setConvPendingDelete(null)
-    await chatApi.deleteConversation(id)
-    if (id === activeConvId) {
-      setActiveConvId(null)
-      navigate('/chat')
+    setIsDeletingConv(true)
+    try {
+      await chatApi.deleteConversation(id)
+      setConvPendingDelete(null)
+      if (id === activeConvId) {
+        setActiveConvId(null)
+        navigate('/chat')
+      }
+      await qc.invalidateQueries({ queryKey: ['conversations'] })
+    } catch {
+      // Leave the modal open with the conversation intact so the user can
+      // retry — the delete request can take several seconds (remote DB
+      // round trip), and silently closing on failure previously made a
+      // real error look identical to a successful delete.
+      toast.error('Failed to delete conversation. Please try again.')
+    } finally {
+      setIsDeletingConv(false)
     }
-    qc.invalidateQueries({ queryKey: ['conversations'] })
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full relative">
+      {/* Mobile backdrop for the conversation-history drawer */}
+      <AnimatePresence>
+        {historyOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setHistoryOpen(false)}
+            className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar: conversation history */}
-      <aside className="w-64 border-r border-border flex flex-col bg-card/30">
-        <div className="p-3 border-b border-border">
+      <aside
+        className={cn(
+          'w-72 border-r border-border flex flex-col bg-card',
+          'fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out',
+          'md:static md:z-auto md:w-64 md:translate-x-0',
+          historyOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <div className="p-3 border-b border-border flex items-center gap-2">
           <button
-            onClick={() => { setActiveConvId(null); navigate('/chat') }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
+            onClick={() => { setActiveConvId(null); navigate('/chat'); setHistoryOpen(false) }}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            New Conversation
+            New Research
+          </button>
+          <button
+            onClick={() => setHistoryOpen(false)}
+            aria-label="Close conversation history"
+            className="md:hidden w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {conversations && conversations.length > 0 ? (
             conversations.map((conv) => (
               <div
                 key={conv.id}
                 className={cn(
-                  'group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors',
+                  'group flex items-start gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors',
                   conv.id === activeConvId
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
                 onClick={() => {
                   setActiveConvId(conv.id)
                   navigate(`/chat/${conv.id}`)
+                  setHistoryOpen(false)
                 }}
               >
-                <Bot className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="flex-1 truncate text-xs">{conv.title}</span>
+                <Bot className={cn('w-3.5 h-3.5 flex-shrink-0 mt-0.5', conv.id === activeConvId && 'text-primary')} />
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-xs font-medium">{conv.title}</p>
+                  <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                    {relativeTime(conv.updated_at)}
+                  </p>
+                </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); setConvPendingDelete({ id: conv.id, title: conv.title }) }}
                   aria-label={`Delete conversation "${conv.title}"`}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity flex-shrink-0 mt-0.5"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -291,23 +351,47 @@ export default function ChatPage() {
 
       <Modal
         open={!!convPendingDelete}
-        onClose={() => setConvPendingDelete(null)}
+        onClose={() => { if (!isDeletingConv) setConvPendingDelete(null) }}
         title="Delete conversation?"
         description={convPendingDelete ? `"${convPendingDelete.title}" will be permanently deleted.` : undefined}
         size="sm"
       >
         <div className="flex justify-end gap-2 mt-2">
-          <Button variant="secondary" size="sm" onClick={() => setConvPendingDelete(null)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setConvPendingDelete(null)}
+            disabled={isDeletingConv}
+          >
             Cancel
           </Button>
-          <Button variant="destructive" size="sm" onClick={confirmDeleteConversation}>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={confirmDeleteConversation}
+            loading={isDeletingConv}
+          >
             Delete
           </Button>
         </div>
       </Modal>
 
       {/* Chat main */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile-only: open the conversation-history drawer */}
+        <div className="md:hidden flex items-center gap-2 px-3 py-2 border-b border-border">
+          <button
+            onClick={() => setHistoryOpen(true)}
+            aria-label="Open conversation history"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent"
+          >
+            <History className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-medium text-foreground truncate">
+            {activeConv?.title || 'Legal AI Chat'}
+          </span>
+        </div>
+
         {scopedCase && (
           <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-primary/20 bg-primary/5 text-xs">
             <span className="flex items-center gap-2 text-primary">
@@ -333,26 +417,34 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {!activeConvId && messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                <Bot className="w-8 h-8 text-primary" />
+              <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center mb-5">
+                <Bot className="w-6 h-6 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">ChronoLegal AI</h2>
-              <p className="text-muted-foreground mb-8 max-w-sm">
-                {scopedCase
-                  ? `Ask a question about ${scopedCase.name}. I'll search its indexed passages and give you a grounded, cited answer.`
-                  : "Ask any legal question. I'll search the indexed judgments and give you grounded, cited answers."}
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
+                Legal AI Research
               </p>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
-                For example
+              <h2 className="font-serif text-xl font-bold text-foreground mb-2 max-w-md text-balance">
+                {scopedCase
+                  ? `Research ${scopedCase.name}`
+                  : 'Search across your indexed judgments'}
+              </h2>
+              <p className="text-muted-foreground mb-8 max-w-sm text-[15px] leading-relaxed">
+                {scopedCase
+                  ? "I'll search this judgment's indexed passages and give you a grounded, cited answer."
+                  : 'Receive answers grounded in retrieved evidence from your legal knowledge base, with citations to the source judgments.'}
+              </p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Research Starters
               </p>
               <div className="space-y-2 w-full max-w-md">
                 {SUGGESTED.map((p) => (
                   <button
                     key={p}
                     onClick={() => setInput(p)}
-                    className="w-full text-left px-4 py-3 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 text-sm text-muted-foreground hover:text-foreground transition-all"
+                    className="w-full flex items-center gap-2 text-left px-4 py-3 rounded-lg border border-border hover:border-primary/40 hover:bg-accent/40 text-sm text-foreground/90 transition-all group"
                   >
-                    {p}
+                    <span className="flex-1">{p}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                   </button>
                 ))}
               </div>
@@ -362,6 +454,25 @@ export default function ChatPage() {
           {messages.map((msg) => (
             <ChatMessage key={msg.id} message={msg} />
           ))}
+
+          {/* Echo the user's own question immediately — the real answer can
+              take 15-45s (query rewrite + retrieval + rerank + Groq), and it
+              previously vanished from view for that entire duration since
+              the persisted copy only arrives after the full round trip. */}
+          {pendingUserMessage && (
+            <ChatMessage
+              message={{
+                id: 'pending-user-message',
+                conversation_id: activeConvId ?? '',
+                role: 'user',
+                content: pendingUserMessage,
+                citations: null,
+                token_count: null,
+                latency_ms: null,
+                created_at: new Date().toISOString(),
+              }}
+            />
+          )}
 
           {/* Streaming message */}
           {isStreaming && (
@@ -423,13 +534,19 @@ export default function ChatPage() {
         {/* Input */}
         <div className="border-t border-border p-4">
           <div className="max-w-4xl mx-auto">
-            <div className="flex gap-3 items-end glass rounded-2xl p-3">
+            <div className="flex items-center gap-1.5 mb-1.5 px-1 text-[11px] text-muted-foreground">
+              <span className="font-medium">Knowledge scope:</span>
+              <span className={cn(scopedCase && 'text-primary font-medium')}>
+                {scopedCase ? `Case — ${scopedCase.name}` : 'All indexed judgments'}
+              </span>
+            </div>
+            <div className="flex gap-3 items-end rounded-xl border border-border bg-card p-3 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 transition-colors">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about the facts, reasoning, judgment, statutes, or outcome..."
+                placeholder="Ask about a judgment, legal principle, statute, or reasoning..."
                 rows={1}
                 className="flex-1 bg-transparent resize-none outline-none text-sm text-foreground placeholder:text-muted-foreground max-h-40 overflow-y-auto"
                 style={{ minHeight: '24px' }}
@@ -442,7 +559,7 @@ export default function ChatPage() {
               <button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || isStreaming}
-                className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
               >
                 {isStreaming ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -478,7 +595,9 @@ function PipelineIndicator({ stage, collapsed }: { stage: PipelineStage; collaps
   }
 
   return (
-    <div className="flex items-center gap-1.5 text-xs">
+    <div className="space-y-1.5">
+      <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">Researching</p>
+      <div className="flex items-center gap-1.5 text-xs flex-wrap">
       {PIPELINE_STEPS.map((step, i) => {
         const state = i < currentIdx ? 'done' : i === currentIdx ? 'active' : 'pending'
         return (
@@ -495,6 +614,7 @@ function PipelineIndicator({ stage, collapsed }: { stage: PipelineStage; collaps
           </div>
         )
       })}
+      </div>
     </div>
   )
 }
@@ -543,6 +663,9 @@ function ChatMessage({ message }: { message: Message }) {
           </div>
         ) : (
           <div className="space-y-3">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Answer
+            </p>
             <div className="legal-prose">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {message.content}
@@ -624,4 +747,16 @@ function CitationList({ citations }: { citations: Citation[] }) {
       )}
     </div>
   )
+}
+
+function relativeTime(isoDate: string): string {
+  const diffMs = Date.now() - new Date(isoDate).getTime()
+  const mins = Math.round(diffMs / 60_000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(isoDate).toLocaleDateString()
 }

@@ -4,25 +4,30 @@
 
 @layer base {
   :root {
-    --background: 222 47% 5%;
-    --foreground: 210 40% 96%;
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 45 68% 55%;
-    --primary-foreground: 222 47% 5%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 217 33% 14%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 96%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 96%;
-    --border: 217 33% 18%;
-    --input: 217 33% 18%;
-    --ring: 45 68% 55%;
+    --background: 40 33% 97%;
+    --foreground: 222 47% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 13%;
+    /* Deliberately deeper/less saturated than a bright "AI product" orange —
+       reads as legal gold/brass used sparingly for primary actions and
+       active state, not a dominant UI color. */
+    --primary: 40 68% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 16% 94%;
+    --secondary-foreground: 222 47% 16%;
+    --muted: 210 14% 95%;
+    --muted-foreground: 215 12% 42%;
+    --accent: 40 68% 94%;
+    --accent-foreground: 222 47% 16%;
+    --destructive: 0 65% 42%;
+    --destructive-foreground: 0 0% 100%;
+    /* Warm-gray rather than cool-gray borders, consistent with the ivory
+       background and navy/gold identity. */
+    --border: 32 12% 87%;
+    --input: 32 12% 87%;
+    --ring: 40 68% 45%;
     --radius: 0.6rem;
   }
 }
@@ -84,7 +89,7 @@
 
   /* Prose overrides for legal documents */
   .legal-prose {
-    @apply prose prose-invert prose-sm max-w-none;
+    @apply prose prose-sm max-w-none;
   }
   .legal-prose h1, .legal-prose h2, .legal-prose h3 {
     @apply font-serif text-foreground;
@@ -94,6 +99,18 @@
   }
   .legal-prose code {
     @apply bg-muted text-primary rounded px-1;
+  }
+  /* Tailwind Typography's default `pre` style assumes a syntax-highlighted
+     code block (dark background, light text) — wrong for this app, which
+     never shows real code, only legal text. Pinned to the same light
+     surface as everything else so this can't silently regress into
+     dark-on-dark again if `.legal-prose` content ever includes a code
+     fence (e.g. a generated summary). */
+  .legal-prose pre {
+    @apply bg-muted text-foreground;
+  }
+  .legal-prose pre code {
+    @apply bg-transparent text-foreground;
   }
 }
 
@@ -118,7 +135,7 @@
 .skeleton::after {
   content: '';
   @apply absolute inset-0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.06), transparent);
   animation: shimmer 2s infinite;
   transform: translateX(-100%);
 }

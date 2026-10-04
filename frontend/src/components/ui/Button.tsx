@@ -14,7 +14,7 @@ const buttonVariants = cva(
         ghost:
           'text-foreground/80 hover:bg-surface hover:text-foreground active:scale-95',
         destructive:
-          'bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 active:scale-95',
+          'bg-red-500/10 text-red-700 border border-red-500/30 hover:bg-red-500/20 active:scale-95',
         link: 'underline-offset-4 hover:underline text-primary p-0 h-auto',
       },
       size: {

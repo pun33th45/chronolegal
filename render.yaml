@@ -1,73 +1,49 @@
-# Render Blueprint for the ChronoLegal FREE-TIER COLLEGE DEMO deployment.
+# Render Blueprint — ChronoLegal BACKEND ONLY.
 #
-# This is an ADDITIVE, demo-specific deployment path. It does not replace or
-# modify docker-compose.yml / docker-compose.prod.yml, which remain the
-# primary, fully-featured self-hosted deployment (see docs/deployment.md).
+# The frontend is deployed separately on Vercel (frontend/vercel.json).
+# docker-compose.yml / docker-compose.prod.yml remain the self-hosted path.
 #
-# Architecture:
-#   - Frontend: Render Static Site, existing Vite build, unmodified.
-#   - Backend: Render Web Service (Docker, existing backend/Dockerfile,
-#     unmodified), CHROMA_MODE=embedded (in-process Chroma, no separate
-#     vector-DB service), EMBEDDING_PROVIDER=huggingface with EMBEDDING_MODEL
-#     overridden to a small model (see below), LLM_PROVIDER=groq.
-#   - Database: the user's own existing Supabase PostgreSQL project — NOT
-#     Render's managed Postgres. POSTGRES_* values must be entered manually
-#     in the Render dashboard (sync: false below); this file cannot know
-#     them and must never contain real credentials.
-#   - Redis: intentionally NOT provisioned — see docs/deployment.md's
-#     Redis section for the one disclosed trade-off this causes (refresh
-#     tokens stop working past their natural expiry without it; login/
-#     access still work).
+# Architecture (unchanged from local):
+#   - FastAPI in Docker (backend/Dockerfile production stage), ONE process.
+#   - Embedded Chroma (CHROMA_MODE=embedded) on a Render persistent disk, so
+#     the vector index survives restarts and redeploys.
+#   - LegalBERT embeddings + cross-encoder reranker, both baked into the
+#     image at build time (no download on boot).
+#   - Groq for LLM calls. The key lives only here, never in the frontend.
+#   - Existing Supabase PostgreSQL (session pooler). No Redis.
 #
-# EMBEDDING_MODEL override — why this matters for a FREE Render instance:
-#   The app's default embedding model, BAAI/bge-large-en-v1.5, is a
-#   335M-parameter model (~1.3GB of weights alone) — Render's free web
-#   service has a hard 512MB RAM ceiling, so the default model would very
-#   likely crash the service during startup warmup. sentence-transformers/
-#   all-MiniLM-L6-v2 is still a real, standard HuggingFace model through the
-#   exact same EMBEDDING_PROVIDER=huggingface code path (no code change) —
-#   it's the same model already proven to correctly retrieve relevant legal
-#   text in this repo's real (non-mocked) RAG retrieval integration test
-#   (backend/tests/integration/test_embedding_retrieval.py). This is a
-#   config choice for the free-tier deployment, not an architecture change.
+# Why a paid plan: LegalBERT + reranker + torch need roughly 1–1.3GB RAM
+# (free/starter instances have 512MB), and persistent disks are not
+# available on the free plan. A disk also pins the service to a single
+# instance, which is exactly what embedded Chroma requires.
 #
-# Field names (env: docker / static, generateValue, sync: false) match
-# Render's Blueprint reference as of this writing — confirm against
-# Render's current docs before running `render blueprint launch`, since
-# that schema does evolve.
-#
-# REQUIRED MANUAL STEPS after connecting this repo in the Render dashboard:
-#   1. Enter GROQ_API_KEY and the five POSTGRES_* values below in the Render
-#      dashboard (every `sync: false` entry) — never put real values here.
-#      For POSTGRES_*, use your Supabase project's SESSION POOLER connection
-#      details (Project Settings -> Database -> Connect -> "Session pooler"
-#      tab), not the "Direct connection" ones — the direct-connection host
-#      requires IPv6, which Render (like most PaaS hosts) does not support
-#      for outbound connections; the session pooler is Supabase's own
-#      documented recommendation for exactly this situation (a persistent,
-#      IPv4-only backend process).
-#   2. Once both services have their Render URLs, set CORS_ORIGINS below to
-#      the frontend's exact URL, and VITE_API_BASE_URL to the backend's
-#      exact URL (+ /api/v1), then redeploy both.
-#   3. Run once, manually, against your Supabase database (Supabase's SQL
-#      Editor), if not already present:
-#        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-#        CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-#        CREATE EXTENSION IF NOT EXISTS "btree_gin";
-#      (These normally get created by this repo's own docker-entrypoint-
-#      initdb.d init script, which never runs against a managed database
-#      like Supabase.)
-#   4. The backend's own startup already calls run_migrations() (Alembic)
-#      on every boot, so no separate migration step is needed.
+# MANUAL STEPS after creating the service from this Blueprint:
+#   1. Enter every `sync: false` value in the Render dashboard.
+#      POSTGRES_* = Supabase "Session pooler" values (port 5432, IPv4), not
+#      "Direct connection" (IPv6-only) or the transaction pooler (6543,
+#      breaks asyncpg prepared statements).
+#   2. Set CORS_ORIGINS to the exact Vercel URL (no trailing slash), plus
+#      localhost for local development, e.g.
+#        https://chronolegal.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+#   3. Seed the disk with the existing local index: copy the contents of
+#      backend/chroma_data/ into /var/data/chroma (Render shell / scp), then
+#      restart. If the disk is empty, startup re-embeds every case from
+#      Supabase instead (slower, and uses the generic chunker).
 
 services:
   - type: web
     name: chronolegal-backend
-    env: docker
+    runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: free
+    plan: standard
+    region: singapore
+    numInstances: 1
     healthCheckPath: /health
+    disk:
+      name: chroma-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: APP_ENV
         value: production
@@ -77,61 +53,62 @@ services:
         generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
-      # Existing Supabase project — enter your Session Pooler values here
-      # (see step 1 above). Settings.build_database_url() already assembles
-      # these into a correctly-prefixed postgresql+asyncpg:// URL (see
-      # backend/app/core/config.py) — no code change needed.
+      # Never used to connect (no Redis is provisioned), but the production
+      # secret check rejects the .env.example default.
+      - key: REDIS_PASSWORD
+        generateValue: true
+
+      # Supabase PostgreSQL (session pooler)
       - key: POSTGRES_HOST
         sync: false
       - key: POSTGRES_PORT
-        sync: false
+        value: "5432"
       - key: POSTGRES_DB
-        sync: false
+        value: postgres
       - key: POSTGRES_USER
         sync: false
       - key: POSTGRES_PASSWORD
         sync: false
+      # The defaults (10 + 20 overflow) exceed Supabase's pooler limits.
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "5"
+
+      # Embedded Chroma on the persistent disk
       - key: CHROMA_MODE
         value: embedded
       - key: CHROMA_PERSIST_DIRECTORY
-        value: /tmp/chronolegal-chroma
+        value: /var/data/chroma
+
+      # LegalBERT + reranker (pre-downloaded into HF_HOME by the Dockerfile)
       - key: EMBEDDING_PROVIDER
-        value: huggingface
+        value: legalbert
       - key: EMBEDDING_MODEL
-        value: sentence-transformers/all-MiniLM-L6-v2
-      - key: LLM_PROVIDER
-        value: groq
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GROQ_MODEL
-        value: openai/gpt-oss-20b
-      - key: CORS_ORIGINS
-        value: "https://REPLACE-WITH-YOUR-FRONTEND-URL.onrender.com"
-      - key: CORS_ALLOW_CREDENTIALS
-        value: "true"
+        value: nlpaueb/legal-bert-base-uncased
+      - key: EMBEDDING_DEVICE
+        value: cpu
+      - key: RERANKER_MODEL
+        value: cross-encoder/ms-marco-MiniLM-L-6-v2
+      - key: HF_HUB_OFFLINE
+        value: "1"
       - key: SKIP_MODEL_WARMUP
         value: "false"
-      # Redis is not provisioned for this demo, but
-      # Settings._validate_production_secrets() unconditionally rejects the
-      # known-insecure default REDIS_PASSWORD ("redis_password") whenever
-      # APP_ENV=production, regardless of whether Redis is actually used —
-      # confirmed locally in an earlier phase of this work: omitting this
-      # crashes the backend at import time, before it ever reaches /health.
-      # This value is never used to connect to anything; it only needs to
-      # not equal the default.
-      - key: REDIS_PASSWORD
-        generateValue: true
 
-  - type: web
-    name: chronolegal-frontend
-    env: static
-    rootDir: frontend
-    buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: "https://REPLACE-WITH-YOUR-BACKEND-URL.onrender.com/api/v1"
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+      # Groq
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: GROQ_REASONING_EFFORT
+        value: low
+      - key: LLM_MAX_TOKENS
+        value: "2048"
+      - key: GROQ_API_KEY
+        sync: false
+
+      # CORS — exact Vercel origin + localhost for development (see step 2).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ALLOW_CREDENTIALS
+        value: "true"

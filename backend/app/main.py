@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -170,9 +171,15 @@ async def app_exception_handler(request: Request, exc: AppException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # exc.errors() can embed a raw exception instance in ctx.error (e.g. a
+    # ValueError raised by a Pydantic @field_validator, such as the password
+    # strength check) — plain json.dumps can't serialize that and this
+    # handler would itself crash into a generic 500, hiding the real
+    # validation message. jsonable_encoder sanitizes it the same way
+    # FastAPI's own default handler does.
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "type": "ValidationError"},
+        content={"detail": jsonable_encoder(exc.errors()), "type": "ValidationError"},
     )
 
 

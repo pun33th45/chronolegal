@@ -81,6 +81,7 @@ def _build_llm(
             max_tokens=max_tokens,
             timeout=timeout,
             streaming=True,
+            reasoning_effort=settings.GROQ_REASONING_EFFORT,
         )
 
     raise ValueError(f"Unsupported LLM provider: {provider}")

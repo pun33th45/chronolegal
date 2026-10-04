@@ -27,6 +27,8 @@ class CaseChunkRead(BaseModel):
     chunk_index: int
     content: str
     page_number: int | None = None
+    start_char: int | None = None
+    end_char: int | None = None
     chroma_id: str | None = None
 
     model_config = {"from_attributes": True}
@@ -43,6 +45,13 @@ class LegalCaseSummary(BaseModel):
     decision_type: str | None = None
     summary: str | None = None
     citation_count: int = 0
+    # Knowledge-base management fields (Knowledge Base page) — additive,
+    # existing consumers of this schema (Dashboard recent cases, Search
+    # results) are unaffected since they simply don't use these fields.
+    chunk_count: int = 0
+    is_embedded: bool = False
+    source_file: str | None = None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
