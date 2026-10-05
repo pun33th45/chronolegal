@@ -54,7 +54,7 @@ export default function LandingPage() {
           <img
             src="/chronolegal-logo.png"
             alt="ChronoLegal — Legal Research Platform"
-            className="h-7 w-auto object-contain"
+            className="h-8 sm:h-10 md:h-12 w-auto object-contain"
           />
           <div className="flex items-center gap-4">
             <Link
