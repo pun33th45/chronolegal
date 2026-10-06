@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     auth,
     cases,
     chat,
+    compare,
     documents,
     feedback,
     ner,
@@ -20,6 +21,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(chat.router, prefix="/chat", tags=["Chat & QA"])
 api_router.include_router(search.router, prefix="/search", tags=["Legal Search"])
 api_router.include_router(cases.router, prefix="/cases", tags=["Legal Cases"])
+api_router.include_router(compare.router, prefix="/compare", tags=["Case Comparison"])
 api_router.include_router(summary.router, prefix="/summary", tags=["Case Summary"])
 api_router.include_router(ner.router, prefix="/ner", tags=["Named Entity Recognition"])
 api_router.include_router(timeline.router, prefix="/timeline", tags=["Timeline"])

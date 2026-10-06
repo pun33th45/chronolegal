@@ -51,6 +51,10 @@ class AnalyticsDashboard(BaseModel):
     top_keywords: list[TopItem]
     case_trends: list[CaseTrend]
     decision_types: list[DecisionTypeStats]
+    # Judgments missing the metadata behind the court / year charts, so the
+    # UI can say what those charts do not cover.
+    cases_without_court: int = 0
+    cases_without_date: int = 0
     avg_text_length: float
     avg_search_latency_ms: float
     storage_used_mb: float

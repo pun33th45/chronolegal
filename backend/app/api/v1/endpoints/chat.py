@@ -21,6 +21,10 @@ from app.services.legal.conversation_service import ConversationService
 
 router = APIRouter()
 
+# Strong references to in-flight "save the user's message" tasks so they
+# are not garbage-collected mid-write (see chat_stream).
+_background_saves: set = set()
+
 
 async def _resolve_case_name(filters: dict | None, db: AsyncSession) -> str | None:
     """When a question is scoped to one case, look up its real name so the
@@ -113,32 +117,54 @@ async def chat_stream(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Only what the research itself needs runs before the stream starts: an
+    # existing conversation's ownership check (so a bad id is still a real
+    # 404) and history, plus the scoped case's name. Creating a new
+    # conversation and saving the user's message don't affect the answer, so
+    # they run concurrently with retrieval in their own session (Supabase is
+    # ~300ms per round trip away; doing them first delayed the first event by
+    # several seconds). They are awaited before the assistant reply is saved,
+    # so message order in the conversation is unchanged.
+    import asyncio
+
     conv_svc = ConversationService(db)
     rag = RAGPipeline()
+    user_id = current_user.id
 
+    existing_id = None
+    history = []
     if payload.conversation_id:
-        conversation = await conv_svc.get(payload.conversation_id, current_user.id)
+        conversation = await conv_svc.get(payload.conversation_id, user_id)
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-    else:
-        conversation = await conv_svc.create(
-            ConversationCreate(title="New Conversation"), current_user.id
-        )
-
-    history = await conv_svc.get_messages(conversation.id, limit=10)
-    # Must read message_count before add_message(): its bulk UPDATE
-    # (`message_count = message_count + 1`) gets synchronized back into this
-    # same in-memory `conversation` object by SQLAlchemy's session-sync
-    # evaluator, so checking afterwards would always see the post-increment
-    # value and never detect "this was the first message".
-    is_first_message = conversation.message_count == 0
+        existing_id = conversation.id
+        history = await conv_svc.get_messages(conversation.id, limit=10)
     case_name = await _resolve_case_name(payload.filters, db)
-    await conv_svc.add_message(conversation.id, role="user", content=payload.message)
-    await db.commit()
+
+    async def save_user_message() -> tuple[uuid.UUID, bool]:
+        async with AsyncSessionLocal() as session:
+            svc = ConversationService(session)
+            if existing_id is not None:
+                conv = await svc.get(existing_id, user_id)
+            else:
+                conv = await svc.create(ConversationCreate(title="New Conversation"), user_id)
+            # Must read message_count before add_message(): its bulk UPDATE
+            # (`message_count = message_count + 1`) is synchronized back into
+            # this in-memory object, so checking afterwards would never
+            # detect "this was the first message".
+            is_first = conv.message_count == 0
+            await svc.add_message(conv.id, role="user", content=payload.message)
+            await session.commit()
+            return conv.id, is_first
 
     async def event_generator():
         full_answer = ""
         citations = []
+        conversation_id = existing_id
+        # Not cancelled if the client disconnects: the question is still saved.
+        persist = asyncio.create_task(save_user_message())
+        _background_saves.add(persist)
+        persist.add_done_callback(_background_saves.discard)
         try:
             async for chunk in rag.stream(
                 query=payload.message,
@@ -155,6 +181,8 @@ async def chat_stream(
                 data = chunk.model_dump_json()
                 yield f"data: {data}\n\n"
 
+            conversation_id, is_first_message = await persist
+
             # Persist final answer using a fresh session: by the time this
             # generator runs, FastAPI has already torn down the request-scoped
             # `db` (get_db commits + closes it as soon as the endpoint function
@@ -166,7 +194,7 @@ async def chat_stream(
             async with AsyncSessionLocal() as fresh_db:
                 fresh_conv_svc = ConversationService(fresh_db)
                 await fresh_conv_svc.add_message(
-                    conversation_id=conversation.id,
+                    conversation_id=conversation_id,
                     role="assistant",
                     content=full_answer,
                     citations=citations,
@@ -176,21 +204,21 @@ async def chat_stream(
                         "..." if len(payload.message) > 80 else ""
                     )
                     await fresh_conv_svc.update(
-                        conversation.id,
-                        current_user.id,
+                        conversation_id,
+                        user_id,
                         ConversationUpdate(title=title),
                     )
                 await fresh_db.commit()
 
             done_chunk = StreamChunk(
                 type="done",
-                conversation_id=str(conversation.id),
+                conversation_id=str(conversation_id),
             )
             yield f"data: {done_chunk.model_dump_json()}\n\n"
 
         except Exception as e:
             logger.error(
-                f"Chat stream failed: conversation_id={conversation.id}, error={e}"
+                f"Chat stream failed: conversation_id={conversation_id}, error={e}"
             )
             error_chunk = StreamChunk(
                 type="error",

@@ -1,123 +1,116 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronDown, ChevronUp, ExternalLink, Scale, Calendar, Gavel } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Badge } from '@/components/ui/Badge'
+import { ArrowUpRight, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { displayCaseName } from '@/lib/caseMeta'
+import { chunkIndexFromId, sourceHref, yearFrom } from '@/lib/citations'
 import type { Citation } from '@/types'
 
 interface CitationCardProps {
   citation: Citation
   index: number
   className?: string
+  /** Optional label shown above the case name, e.g. "Case A". */
+  sideLabel?: string
 }
 
-export function CitationCard({ citation, index, className }: CitationCardProps) {
+/**
+ * One retrieved source behind an answer. Everything shown comes from the
+ * citation the backend returned: case, court/date metadata, the passage's
+ * position in the judgment (its chunk index), the cross-encoder relevance
+ * score and the passage text. Page numbers are shown only when the
+ * ingestion pipeline actually recorded one.
+ */
+export function CitationCard({ citation, index, className, sideLabel }: CitationCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const excerpt = citation.chunk_text ?? citation.content
-  const relevanceScore = citation.relevance_score ?? citation.similarity_score
+  const passage = citation.chunk_text ?? citation.content
+  const score = citation.relevance_score ?? citation.similarity_score
+  const chunkIndex = chunkIndexFromId(citation.chunk_id)
+  const year = citation.year ?? yearFrom(citation.date)
+  const href = sourceHref(citation)
+
+  const meta = [
+    citation.court,
+    year,
+    citation.page_number ? `Page ${citation.page_number}` : null,
+    chunkIndex !== null ? `Passage ${chunkIndex + 1}` : null,
+  ].filter(Boolean)
 
   return (
-    <div className={cn('citation-badge rounded-lg overflow-hidden', className)}>
+    <div className={cn('rounded-lg border border-border bg-card overflow-hidden', className)}>
       <button
+        type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-start gap-3 p-3 text-left hover:bg-white/5 transition-colors"
+        aria-expanded={expanded}
+        className="w-full flex items-start gap-3 p-3 text-left hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
       >
-        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-legal-gold/20 text-xs font-bold text-legal-gold">
-          {index + 1}
+        <span className="mt-0.5 flex h-5 min-w-5 px-1 shrink-0 items-center justify-center rounded-md bg-legal-gold/15 text-[11px] font-semibold text-legal-gold tabular-nums">
+          {citation.rank ?? index + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground line-clamp-2">{citation.case_name}</p>
-          {citation.citation_text && (
-            <p className="mt-0.5 text-xs text-muted-foreground">{citation.citation_text}</p>
+          {sideLabel && (
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary mb-0.5">
+              {sideLabel}
+            </p>
+          )}
+          <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
+            {citation.case_name ? displayCaseName(citation.case_name) : 'Source information unavailable'}
+          </p>
+          {meta.length > 0 && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{meta.join(' · ')}</p>
           )}
         </div>
-        <span className="mt-0.5 shrink-0 text-muted-foreground">
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </span>
+        {typeof score === 'number' && (
+          <span
+            className="mt-0.5 shrink-0 text-[11px] font-medium text-muted-foreground tabular-nums"
+            title="Relevance score from the cross-encoder reranker"
+          >
+            {Math.round(score * 100)}%
+          </span>
+        )}
+        <ChevronDown
+          className={cn(
+            'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+            expanded && 'rotate-180',
+          )}
+        />
       </button>
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-white/10 px-3 pb-3 pt-3 space-y-3">
-              {(citation.court || citation.year || citation.decision_type) && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Court
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {citation.court && (
-                      <div className="flex items-center gap-1 text-xs text-foreground/80">
-                        <Scale className="h-3 w-3 text-muted-foreground" />
-                        {citation.court}
-                      </div>
-                    )}
-                    {citation.year && (
-                      <div className="flex items-center gap-1 text-xs text-foreground/80">
-                        <Calendar className="h-3 w-3 text-muted-foreground" />
-                        {citation.year}
-                      </div>
-                    )}
-                    {citation.decision_type && (
-                      <div className="flex items-center gap-1 text-xs text-foreground/80">
-                        <Gavel className="h-3 w-3 text-muted-foreground" />
-                        {citation.decision_type}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {relevanceScore !== undefined && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Relevance
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1 rounded-full bg-white/10">
-                      <div
-                        className="h-1 rounded-full bg-legal-gold/70"
-                        style={{ width: `${Math.round(relevanceScore * 100)}%` }}
-                      />
-                    </div>
-                    <Badge variant="gold" className="text-[10px]">
-                      {Math.round(relevanceScore * 100)}%
-                    </Badge>
-                  </div>
-                </div>
-              )}
-
-              {excerpt && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Excerpt
-                  </p>
-                  <blockquote className="text-xs text-foreground/80 italic border-l-2 border-legal-gold/50 pl-3 leading-relaxed">
-                    "{excerpt}"
-                  </blockquote>
-                </div>
-              )}
-
-              {citation.case_id && (
-                <Link
-                  to={`/cases/${citation.case_id}`}
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View full case <ExternalLink className="h-3 w-3" />
-                </Link>
-              )}
+      {expanded && (
+        <div className="border-t border-border px-3 pb-3 pt-3 space-y-3">
+          {passage ? (
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Relevant passage
+              </p>
+              <blockquote className="text-[13px] text-foreground/85 leading-relaxed border-l-2 border-legal-gold/60 pl-3 whitespace-pre-line">
+                {passage}
+              </blockquote>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ) : (
+            <p className="text-xs text-muted-foreground">Source information unavailable.</p>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            {typeof score === 'number' ? (
+              <p className="text-[11px] text-muted-foreground">
+                Relevance {Math.round(score * 100)}% <span className="opacity-70">(reranker score)</span>
+              </p>
+            ) : (
+              <span />
+            )}
+            {href && (
+              <Link
+                to={href}
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                View Source <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

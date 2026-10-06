@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import type { SearchResult } from '@/types'
+import { displayCaseName } from '@/lib/caseMeta'
 
 interface SearchResultCardProps {
   result: SearchResult
@@ -28,7 +29,7 @@ export function SearchResultCard({ result, rank, className }: SearchResultCardPr
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h3 className="text-base font-semibold text-foreground leading-tight">
-              {result.case_name}
+              {displayCaseName(result.case_name)}
             </h3>
             {matchScore !== undefined && (
               <Badge variant="gold" className="shrink-0">

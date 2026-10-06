@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -17,13 +17,15 @@ import {
   ScanSearch,
   Scale,
   Tag,
+  X,
 } from 'lucide-react'
 import { casesApi, summaryApi, nerApi, timelineApi } from '@/services/api'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { cn } from '@/utils/cn'
-import type { LegalEntities, SummaryType } from '@/types'
+import type { CasePassage, LegalEntities, SummaryType } from '@/types'
+import { displayCaseName } from '@/lib/caseMeta'
 
 const SUMMARY_TYPES: { value: SummaryType; label: string }[] = [
   { value: 'concise', label: 'Concise' },
@@ -82,6 +84,10 @@ function formatDate(value: string | null | undefined): string | null {
 
 export default function CaseViewerPage() {
   const { caseId } = useParams<{ caseId: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
+  // ?passage=<chunk index> — set by a citation's "View Source" link.
+  const passageParam = searchParams.get('passage')
+  const passageIndex = passageParam !== null && /^\d+$/.test(passageParam) ? Number(passageParam) : null
   const [activeTab, setActiveTab] = useState<ViewerTab>('judgment')
   const [summaryType, setSummaryType] = useState<SummaryType>('concise')
 
@@ -111,6 +117,13 @@ export default function CaseViewerPage() {
     enabled: !!caseId,
   })
 
+  const { data: passage, isLoading: passageLoading, isError: passageError } = useQuery({
+    queryKey: ['case-passage', caseId, passageIndex],
+    queryFn: () => casesApi.getPassage(caseId!, passageIndex!),
+    enabled: !!caseId && passageIndex !== null,
+    retry: false,
+  })
+
   const citationCounts = useMemo(
     () => (caseData?.full_text ? extractCitationCounts(caseData.full_text) : null),
     [caseData?.full_text],
@@ -120,6 +133,24 @@ export default function CaseViewerPage() {
     const body = citationCounts ? stripCitationHeader(caseData.full_text) : caseData.full_text
     return splitIntoParagraphs(body)
   }, [caseData?.full_text, citationCounts])
+
+  // The paragraph of the full judgment that contains the referenced passage.
+  const highlightedParagraph = useMemo(
+    () => (passage ? findPassageParagraph(paragraphs, passage.content) : -1),
+    [paragraphs, passage],
+  )
+  const highlightRef = useRef<HTMLParagraphElement | null>(null)
+  useEffect(() => {
+    if (highlightedParagraph >= 0 && activeTab === 'judgment') {
+      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightedParagraph, activeTab])
+
+  function clearPassage() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('passage')
+    setSearchParams(next, { replace: true })
+  }
 
   if (isLoading) {
     return (
@@ -166,10 +197,10 @@ export default function CaseViewerPage() {
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h1 className="font-serif text-xl font-bold text-foreground">
-              {caseData.case_name}
+              {displayCaseName(caseData.case_name)}
             </h1>
             <Link
-              to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(caseData.case_name)}`}
+              to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(displayCaseName(caseData.case_name))}`}
               className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex-shrink-0"
             >
               <BotMessageSquare className="w-3.5 h-3.5" />
@@ -220,6 +251,17 @@ export default function CaseViewerPage() {
         </div>
 
         {/* Tab Content */}
+        {activeTab === 'judgment' && passageIndex !== null && (
+          <ReferencedPassage
+            loading={passageLoading}
+            failed={passageError}
+            passage={passage}
+            locatedInJudgment={highlightedParagraph >= 0}
+            onJump={() => highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            onClose={clearPassage}
+          />
+        )}
+
         {activeTab === 'judgment' && (
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             {/* Document header */}
@@ -230,7 +272,7 @@ export default function CaseViewerPage() {
                 </p>
               )}
               <h2 className="font-serif text-lg font-bold text-foreground leading-snug max-w-xl mx-auto text-balance">
-                {caseData.case_name}
+                {displayCaseName(caseData.case_name)}
               </h2>
               {formattedDate && (
                 <p className="text-sm text-muted-foreground mt-2">{formattedDate}</p>
@@ -256,7 +298,12 @@ export default function CaseViewerPage() {
                   {paragraphs.map((para, i) => (
                     <p
                       key={i}
-                      className="text-foreground/90 leading-[1.8] text-[15px]"
+                      ref={i === highlightedParagraph ? highlightRef : undefined}
+                      className={cn(
+                        'text-foreground/90 leading-[1.8] text-[15px]',
+                        i === highlightedParagraph &&
+                          'rounded-md bg-legal-gold/10 ring-1 ring-legal-gold/40 -mx-3 px-3 py-2 scroll-mt-24',
+                      )}
                     >
                       {para}
                     </p>
@@ -512,13 +559,100 @@ export default function CaseViewerPage() {
                 to={`/cases/${c.case_id}`}
                 className="block text-xs hover:text-primary transition-colors"
               >
-                <p className="font-medium text-foreground">{c.case_name}</p>
+                <p className="font-medium text-foreground">{displayCaseName(c.case_name)}</p>
                 {c.court && <p className="text-muted-foreground">{c.court}</p>}
               </Link>
             ))}
           </SidebarSection>
         )}
       </div>
+    </div>
+  )
+}
+
+// Locates a retrieved passage inside the reflowed judgment text. Matching is
+// whitespace-insensitive on the passage's opening words (chunking can split
+// mid-paragraph, so the paragraph may contain the passage or vice versa).
+function normalize(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function findPassageParagraph(paragraphs: string[], passage: string): number {
+  const p = normalize(passage)
+  if (p.length < 20) return -1
+  const head = p.slice(0, 80)
+  const byHead = paragraphs.findIndex((para) => normalize(para).includes(head))
+  if (byHead >= 0) return byHead
+  return paragraphs.findIndex((para) => {
+    const n = normalize(para)
+    return n.length >= 40 && p.includes(n.slice(0, 80))
+  })
+}
+
+function ReferencedPassage({
+  loading,
+  failed,
+  passage,
+  locatedInJudgment,
+  onJump,
+  onClose,
+}: {
+  loading: boolean
+  failed: boolean
+  passage: CasePassage | undefined
+  locatedInJudgment: boolean
+  onJump: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="mb-4 rounded-xl border border-legal-gold/40 bg-legal-gold/5 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-legal-gold">
+            Referenced Passage
+          </p>
+          {passage && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Passage {passage.chunk_index + 1}
+              {passage.page_number ? ` · Page ${passage.page_number}` : ''}
+              {passage.section_header ? ` · ${passage.section_header}` : ''}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close referenced passage"
+          className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-full rounded" />
+          <Skeleton className="h-3 w-11/12 rounded" />
+          <Skeleton className="h-3 w-4/5 rounded" />
+        </div>
+      ) : failed || !passage ? (
+        <p className="text-sm text-muted-foreground">Source information unavailable for this citation.</p>
+      ) : (
+        <>
+          <blockquote className="text-sm text-foreground/90 leading-relaxed border-l-2 border-legal-gold/60 pl-3 whitespace-pre-line max-h-64 overflow-y-auto">
+            {passage.content}
+          </blockquote>
+          {locatedInJudgment && (
+            <button
+              type="button"
+              onClick={onJump}
+              className="mt-3 text-xs font-medium text-primary hover:underline"
+            >
+              Show in full judgment ↓
+            </button>
+          )}
+        </>
+      )}
     </div>
   )
 }

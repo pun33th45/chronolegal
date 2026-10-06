@@ -110,6 +110,22 @@ class Settings(BaseSettings):
     def use_secret_key_fallback(cls, v: str, info) -> str:
         return v or info.data.get("SECRET_KEY", "")
 
+    # Google Sign-In (OAuth 2.0 authorization-code flow + OpenID Connect).
+    # Disabled unless both client values are set. GOOGLE_REDIRECT_URI is this
+    # backend's own callback (.../api/v1/auth/google/callback) and must match
+    # the Google Cloud Console entry exactly; FRONTEND_URL is where the browser
+    # is sent afterwards. Both come only from configuration, never from the
+    # request, so the flow cannot be used as an open redirect.
+    # GOOGLE_CLIENT_SECRET is backend-only — never give it a VITE_ name.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET)
+
     # LLM
     LLM_PROVIDER: Literal["ollama", "openai", "anthropic", "huggingface", "groq"] = (
         "ollama"
@@ -245,6 +261,18 @@ class Settings(BaseSettings):
                 'Production startup blocked — CORS_ORIGINS="*" combined with '
                 "CORS_ALLOW_CREDENTIALS=true allows credentialed requests from "
                 "any origin. Set CORS_ORIGINS to the exact production domain(s)."
+            )
+
+        # The OAuth callback carries a one-time authorization code and the
+        # state cookie, and the frontend hand-off carries a one-time login
+        # code — none of these may travel over plain HTTP in production.
+        if self.google_oauth_enabled and not (
+            self.GOOGLE_REDIRECT_URI.startswith("https://")
+            and self.FRONTEND_URL.startswith("https://")
+        ):
+            raise ValueError(
+                "Production startup blocked — Google Sign-In is configured but "
+                "GOOGLE_REDIRECT_URI and FRONTEND_URL must both use https://."
             )
 
         # DEBUG isn't a secret so it isn't in _DEFAULT_SECRETS, but it isn't

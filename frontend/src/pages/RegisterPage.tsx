@@ -5,6 +5,7 @@ import { BookOpen, Eye, EyeOff, FileText, Scale, Search } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/api'
 import { Button } from '@/components/ui/Button'
+import { GoogleSignInSection } from '@/components/auth/GoogleSignIn'
 import toast from 'react-hot-toast'
 
 // FastAPI returns `detail` as a plain string for most errors (e.g. "Email
@@ -189,6 +190,8 @@ export default function RegisterPage() {
               {loading ? 'Creating account...' : 'Create Account'}
             </Button>
           </form>
+
+          <GoogleSignInSection />
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{' '}

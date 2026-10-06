@@ -8,12 +8,15 @@ import { Spinner } from '@/components/ui/Spinner'
 import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
+import GoogleCallbackPage from '@/pages/GoogleCallbackPage'
+import LegalPage from '@/pages/LegalPage'
 import DashboardPage from '@/pages/DashboardPage'
 import KnowledgeBasePage from '@/pages/KnowledgeBasePage'
 import ChatPage from '@/pages/ChatPage'
 import SearchPage from '@/pages/SearchPage'
 import UploadPage from '@/pages/UploadPage'
 import CaseViewerPage from '@/pages/CaseViewerPage'
+import ComparePage from '@/pages/ComparePage'
 import SettingsPage from '@/pages/SettingsPage'
 import ProfilePage from '@/pages/ProfilePage'
 
@@ -59,6 +62,9 @@ export default function App() {
             path="/register"
             element={<PublicRoute><RegisterPage /></PublicRoute>}
           />
+          <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
 
           {/* Protected routes with layout */}
           <Route
@@ -70,6 +76,7 @@ export default function App() {
             <Route path="chat" element={<ChatPage />} />
             <Route path="chat/:conversationId" element={<ChatPage />} />
             <Route path="search" element={<SearchPage />} />
+            <Route path="compare" element={<ComparePage />} />
             <Route path="upload" element={<UploadPage />} />
             <Route
               path="analytics"

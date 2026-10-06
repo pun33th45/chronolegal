@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.models.case import CaseChunk, LegalCase
 
@@ -78,7 +79,10 @@ class CaseService:
         q: str | None = None,
         sort_by: str | None = None,
     ) -> list[LegalCase]:
-        query = select(LegalCase)
+        # The list response (LegalCaseSummary) never includes full_text, and a
+        # single judgment can be ~400KB: loading it here pulled megabytes per
+        # Knowledge Base page from the database for nothing.
+        query = select(LegalCase).options(defer(LegalCase.full_text))
         if court:
             query = query.where(LegalCase.court == court)
         if date_from:
@@ -154,6 +158,16 @@ class CaseService:
             .limit(page_size)
         )
         return list(result.scalars().all())
+
+    async def get_chunk_by_index(
+        self, case_db_id: uuid.UUID, chunk_index: int
+    ) -> CaseChunk | None:
+        result = await self.db.execute(
+            select(CaseChunk).where(
+                CaseChunk.case_id == case_db_id, CaseChunk.chunk_index == chunk_index
+            )
+        )
+        return result.scalars().first()
 
     async def delete_case(self, case: LegalCase) -> None:
         """Deletes the LegalCase row; the DB-level ON DELETE CASCADE on

@@ -57,6 +57,15 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class GoogleExchangeRequest(BaseModel):
+    code: str = Field(min_length=16, max_length=128)
+
+
+class GoogleLinkRequest(BaseModel):
+    link_code: str = Field(min_length=16, max_length=128)
+    password: str = Field(min_length=1, max_length=128)
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)

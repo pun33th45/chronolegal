@@ -9,6 +9,7 @@ import uuid
 from dateutil import parser as date_parser
 from loguru import logger
 
+from app.schemas.case import UNKNOWN_COURT
 from app.services.ai.chunker import LegalChunker
 from app.services.ai.embedding_service import EmbeddingService
 from app.services.ai.ner_service import NERService
@@ -29,6 +30,13 @@ _background_tasks: set[asyncio.Task] = set()
 # return 404 forever. A single local uvicorn process is exactly this app's
 # deployment model, so a plain dict is a correct store here, not a shortcut.
 _upload_status: dict[str, dict] = {}
+
+# Below chromadb's max upsert batch size (5,461 in chromadb 1.5).
+_UPSERT_BATCH = 5000
+
+
+class _UserFacingError(Exception):
+    """An upload failure whose message is safe and useful to show the user."""
 
 
 class DocumentProcessor:
@@ -76,7 +84,10 @@ class DocumentProcessor:
             _upload_status[task_id] = {**base, "status": "extracting"}
             text = await self._extract_text(content, content_type, filename)
             if not text.strip():
-                raise ValueError("No extractable text found in document")
+                raise _UserFacingError(
+                    "We couldn't find any readable text in this file. If it is a "
+                    "scanned PDF, upload a text-based PDF, DOCX or TXT instead."
+                )
 
             doc_id = f"upload_{user_id}_{task_id[:8]}"
             case_name = self._detect_case_title(text) or filename.rsplit(".", 1)[0]
@@ -101,7 +112,7 @@ class DocumentProcessor:
             # calls) without meaningfully improving accuracy, since a fully
             # empty *parsed* result after that internal retry usually means
             # the judgment really has nothing extractable, not a fluke.
-            court = entities.courts[0] if entities.courts else "Uploaded Document"
+            court = entities.courts[0] if entities.courts else UNKNOWN_COURT
             raw_date = entities.dates[0] if entities.dates else None
             judgment_date = None
             if raw_date:
@@ -133,16 +144,22 @@ class DocumentProcessor:
                 "status": "indexing",
                 "chunks": len(chunks),
             }
+            # Chroma rejects a single upsert larger than its max batch size
+            # (5,461 records in chromadb 1.5), which a long judgment such as
+            # the full Kesavananda Bharati PDF (~6,400 chunks) exceeds —
+            # write in fixed-size slices instead.
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: embedder.collection.upsert(
-                    documents=texts,
-                    embeddings=embeddings,  # type: ignore[arg-type]
-                    metadatas=metadatas,  # type: ignore[arg-type]
-                    ids=ids,
-                ),
-            )
+            for i in range(0, len(ids), _UPSERT_BATCH):
+                batch = slice(i, i + _UPSERT_BATCH)
+                await loop.run_in_executor(
+                    None,
+                    lambda b=batch: embedder.collection.upsert(
+                        documents=texts[b],
+                        embeddings=embeddings[b],  # type: ignore[arg-type]
+                        metadatas=metadatas[b],  # type: ignore[arg-type]
+                        ids=ids[b],
+                    ),
+                )
 
             from app.core.database import AsyncSessionLocal
             from app.services.legal.case_service import CaseService
@@ -178,7 +195,20 @@ class DocumentProcessor:
 
         except Exception as e:
             logger.error(f"Document processing failed: task_id={task_id}, error={e}")
-            _upload_status[task_id] = {**base, "status": "failed", "error": str(e)}
+            # The browser gets a plain-language reason, never the internal
+            # exception text (stack details, library errors, file paths).
+            message = (
+                str(e)
+                if isinstance(e, _UserFacingError)
+                else "Something went wrong while processing this judgment. Please try again."
+            )
+            failed_stage = _upload_status.get(task_id, {}).get("status")
+            _upload_status[task_id] = {
+                **base,
+                "status": "failed",
+                "error": message,
+                "failed_stage": failed_stage,
+            }
 
     _CASE_TITLE_RE = re.compile(
         r"^.{1,150}?\b(?:v\.?|vs\.?|versus)\b.{1,150}$", re.IGNORECASE

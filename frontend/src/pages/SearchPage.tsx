@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Filter, Loader2, Scale, Search } from 'lucide-react'
@@ -8,6 +8,7 @@ import { cn } from '@/utils/cn'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { SearchFilters, SearchResult } from '@/types'
+import { displayCaseName } from '@/lib/caseMeta'
 
 const SEARCH_TYPES = [
   { value: 'hybrid', label: 'Hybrid' },
@@ -16,7 +17,9 @@ const SEARCH_TYPES = [
 ]
 
 export default function SearchPage() {
-  const [query, setQuery] = useState('')
+  const [searchParams] = useSearchParams()
+  // ?q= lets other pages (e.g. the Dashboard research box) hand off a query.
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [searchType, setSearchType] = useState('hybrid')
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<SearchFilters>({})
@@ -38,6 +41,14 @@ export default function SearchPage() {
         ),
       }),
   })
+
+  // Run a handed-off query once on arrival (guarded for StrictMode's double effect).
+  const autoSearched = useRef(false)
+  useEffect(() => {
+    if (autoSearched.current || !query.trim()) return
+    autoSearched.current = true
+    searchMutation.mutate()
+  }, [query, searchMutation])
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -221,7 +232,7 @@ function SearchResultCard({ result, rank }: { result: SearchResult; rank: number
               to={`/cases/${result.case_id}`}
               className="font-semibold text-foreground hover:text-primary transition-colors"
             >
-              {result.case_name}
+              {displayCaseName(result.case_name)}
             </Link>
             <div className="flex flex-wrap gap-2 mt-1.5">
               {result.court && (

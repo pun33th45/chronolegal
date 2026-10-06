@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { BookOpen, Eye, EyeOff, FileText, Scale, Search } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/api'
 import { Button } from '@/components/ui/Button'
+import { GoogleSignInSection, googleErrorMessage } from '@/components/auth/GoogleSignIn'
 import toast from 'react-hot-toast'
 
 // FastAPI returns `detail` as a plain string for most errors (e.g. "Incorrect
@@ -34,14 +35,38 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Set when Google sign-in matched an existing email/password account: the
+  // user confirms that account's password once to link Google to it.
+  const [googleLink, setGoogleLink] = useState<{ code: string; email: string } | null>(null)
+
+  useEffect(() => {
+    const oauthError = searchParams.get('oauth_error')
+    if (oauthError) {
+      toast.error(googleErrorMessage(oauthError), { id: 'oauth-error' })
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1))
+    const code = fragment.get('google_link')
+    if (!code) return
+    const email = fragment.get('email') ?? ''
+    window.history.replaceState(null, '', window.location.pathname)
+    setGoogleLink({ code, email })
+    setForm((f) => ({ ...f, email }))
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      const data = await authApi.login(form.email, form.password)
+      const data = googleLink
+        ? await authApi.googleLink(googleLink.code, form.password)
+        : await authApi.login(form.email, form.password)
       setTokens(data.access_token, data.refresh_token, data.user)
-      toast.success('Welcome back!')
+      toast.success(googleLink ? 'Google account linked. Welcome back!' : 'Welcome back!')
       navigate('/dashboard')
     } catch (err: unknown) {
       toast.error(extractErrorMessage(err, 'Login failed'))
@@ -115,6 +140,14 @@ export default function LoginPage() {
             <p className="text-muted-foreground text-sm">Sign in to continue your legal research.</p>
           </div>
 
+          {googleLink && (
+            <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground/90">
+              An account with <span className="font-medium">{googleLink.email}</span> already
+              exists. Enter its password once to link your Google account — afterwards you can
+              sign in either way.
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground/90 mb-1.5">
@@ -126,7 +159,8 @@ export default function LoginPage() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="you@example.com"
                 required
-                className="w-full h-11 px-3.5 bg-card border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+                readOnly={!!googleLink}
+                className="w-full h-11 px-3.5 bg-card border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors read-only:opacity-70"
               />
             </div>
 
@@ -155,9 +189,24 @@ export default function LoginPage() {
             </div>
 
             <Button type="submit" size="lg" loading={loading} className="w-full mt-1">
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Signing in...' : googleLink ? 'Link Google & Sign In' : 'Sign In'}
             </Button>
           </form>
+
+          {googleLink ? (
+            <button
+              type="button"
+              onClick={() => {
+                setGoogleLink(null)
+                setForm({ email: '', password: '' })
+              }}
+              className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel linking
+            </button>
+          ) : (
+            <GoogleSignInSection />
+          )}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{' '}

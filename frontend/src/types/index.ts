@@ -166,6 +166,8 @@ export interface LegalCase {
   is_embedded: boolean
   source_file: string | null
   created_at: string
+  /** Whether the current user may delete it (uploader or admin). */
+  can_delete?: boolean
 }
 
 export interface LegalCaseSummary {
@@ -183,6 +185,8 @@ export interface LegalCaseSummary {
   is_embedded: boolean
   source_file: string | null
   created_at: string
+  /** Whether the current user may delete it (uploader or admin). */
+  can_delete?: boolean
 }
 
 export interface CaseChunk {
@@ -193,6 +197,25 @@ export interface CaseChunk {
   start_char: number | null
   end_char: number | null
   chroma_id: string | null
+}
+
+export interface CasePassage {
+  chunk_index: number
+  content: string
+  section_header: string | null
+  page_number: number | null
+  start_char: number | null
+  end_char: number | null
+}
+
+export interface CompareResponse {
+  case_a: string
+  case_b: string
+  question: string
+  answer: string
+  sufficient_context: boolean
+  citations: Citation[]
+  latency_ms: number
 }
 
 export interface SimilarCaseResult {
@@ -239,6 +262,9 @@ export interface AnalyticsDashboard {
   top_keywords: { name: string; count: number }[]
   case_trends: { year: number; count: number }[]
   decision_types: { decision_type: string; count: number; percentage: number }[]
+  /** Judgments with no recorded court / judgment date (not shown in those charts). */
+  cases_without_court: number
+  cases_without_date: number
   avg_text_length: number
   avg_search_latency_ms: number
   storage_used_mb: number

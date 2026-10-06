@@ -17,7 +17,13 @@ from app.core.redis import cache
 from app.schemas.chat import Citation, RelatedCase, StreamChunk
 from app.services.ai.embedding_service import EmbeddingService
 from app.services.ai.llm_provider import generate_text, stream_text
-from app.services.ai.prompt_templates import LEGAL_QA_SYSTEM, LEGAL_QA_USER
+from app.services.ai.prompt_templates import (
+    CASE_COMPARE_SYSTEM,
+    CASE_COMPARE_USER,
+    COMPARE_INSUFFICIENT,
+    LEGAL_QA_SYSTEM,
+    LEGAL_QA_USER,
+)
 from app.services.ai.query_rewriter import rewrite_query
 from app.services.ai.reranker import Reranker
 
@@ -262,8 +268,11 @@ class RAGPipeline:
         )
         top_k = top_k or settings.TOP_K_RERANKED
 
-        yield StreamChunk(type="status", content="retrieving")
+        # Each status is emitted at the moment that stage actually starts, so
+        # the UI's research-progress steps mirror the real pipeline.
+        yield StreamChunk(type="status", content="understanding")
         rewritten = await rewrite_query(query, case_name=case_name)
+        yield StreamChunk(type="status", content="retrieving")
         chroma_filters = self._build_chroma_filters(filters)
         raw_results = await self.embedder.similarity_search(
             query=rewritten,
@@ -319,6 +328,7 @@ class RAGPipeline:
 
         # Yield citations only after the threshold gate passes
         yield StreamChunk(type="citation", citations=citations_data)
+        yield StreamChunk(type="status", content="generating")
 
         context = "\n\n---\n\n".join(context_parts)
         history_text = self._format_history(conversation_history or [])
@@ -330,6 +340,110 @@ class RAGPipeline:
 
         async for text_chunk in stream_text(user_prompt, system_prompt=LEGAL_QA_SYSTEM):
             yield StreamChunk(type="text", content=text_chunk)
+
+    async def _case_evidence(
+        self, question: str, case_id: str, case_name: str, top_k: int
+    ) -> list[tuple[str, dict[str, Any], float]]:
+        """The normal retrieval path scoped to one judgment: query rewrite ->
+        LegalBERT dense retrieval (case-filtered) -> BM25 + RRF fusion ->
+        cross-encoder rerank. Returns (passage, metadata, rerank score)."""
+        rewritten = await rewrite_query(question, case_name=case_name)
+        filters = {"case_id": case_id}
+        raw = await self.embedder.similarity_search(
+            query=rewritten,
+            n_results=self._retrieval_n_results(filters),
+            where=self._build_chroma_filters(filters),
+        )
+        documents = raw.get("documents", [[]])[0]
+        metadatas = raw.get("metadatas", [[]])[0]
+        if not documents:
+            return []
+        fused_order = self._fuse_results(rewritten, documents, list(range(len(documents))))
+        fused_docs = [documents[i] for i in fused_order]
+        fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
+        reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
+        return [(fused_docs[i], fused_meta[i], score) for i, score in reranked]
+
+    async def compare(
+        self,
+        case_a: dict[str, str],
+        case_b: dict[str, str],
+        question: str,
+        top_k_per_case: int = 3,
+    ) -> RAGResult:
+        """Grounded comparison of two indexed judgments. Evidence is
+        retrieved separately from each case, and each case must pass the same
+        SIMILARITY_THRESHOLD evidence gate as normal research — if either
+        side lacks evidence, no comparison is generated."""
+        start = time.perf_counter()
+        evidence = []
+        for case in (case_a, case_b):
+            passages = await self._case_evidence(
+                question, case["case_id"], case["case_name"], top_k_per_case
+            )
+            best = max((score for _, _, score in passages), default=0.0)
+            if best < settings.SIMILARITY_THRESHOLD:
+                logger.info(
+                    f"Compare: insufficient evidence in case_id={case['case_id']} "
+                    f"(best rerank score {best:.3f})"
+                )
+                return RAGResult(
+                    answer=COMPARE_INSUFFICIENT,
+                    citations=[],
+                    sufficient_context=False,
+                    context_used=False,
+                    latency_ms=int((time.perf_counter() - start) * 1000),
+                )
+            evidence.append((case, passages))
+
+        context_parts: list[str] = []
+        citations: list[Citation] = []
+        for label, (case, passages) in zip(("Case A", "Case B"), evidence):
+            for doc, meta, score in passages:
+                n = len(citations) + 1
+                context_parts.append(
+                    f"[Document {n}] ({label}: {case['case_name']})\n{doc}\n"
+                )
+                citations.append(
+                    Citation(
+                        rank=n,
+                        case_id=case["case_id"],
+                        case_name=case["case_name"],
+                        chunk_id=f"{case['case_id']}__chunk_{meta.get('chunk_index', 0)}",
+                        content=doc[:500],
+                        similarity_score=round(score, 4),
+                        court=meta.get("court"),
+                        date=meta.get("date"),
+                    )
+                )
+
+        answer = await generate_text(
+            CASE_COMPARE_USER.format(
+                case_a=case_a["case_name"],
+                case_b=case_b["case_name"],
+                context="\n---\n".join(context_parts),
+                question=question,
+            ),
+            system_prompt=CASE_COMPARE_SYSTEM,
+        )
+        answer = self._strip_invalid_citations(answer.strip(), len(citations))
+        # Only a response that IS the refusal counts as one. The model may
+        # also use the sentence inside a single section (e.g. "How they
+        # relate") while still comparing both cases with citations — that
+        # partial answer must not be thrown away.
+        bare = answer.strip().strip('"').strip().lower()
+        sufficient = not bare.startswith(COMPARE_INSUFFICIENT.lower()[:60]) or len(bare) > len(
+            COMPARE_INSUFFICIENT
+        ) + 40
+        if not sufficient:
+            logger.info("Compare: model reported insufficient evidence in the retrieved passages")
+        return RAGResult(
+            answer=answer if sufficient else COMPARE_INSUFFICIENT,
+            citations=citations if sufficient else [],
+            sufficient_context=sufficient,
+            context_used=sufficient,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+        )
 
     def _build_chroma_filters(self, filters: dict[str, Any] | None) -> dict | None:
         if not filters:

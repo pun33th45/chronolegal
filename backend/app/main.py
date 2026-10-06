@@ -123,6 +123,9 @@ async def lifespan(app: FastAPI):
         await redis.ping()
         logger.info("Redis connection verified")
     except Exception as e:
+        from app.core.redis import _note_failure
+
+        _note_failure(e)  # open the cache circuit breaker before the first request
         logger.warning(f"Redis not available: {e}")
 
     if settings.SKIP_MODEL_WARMUP:

@@ -14,8 +14,13 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    pool_recycle=3600,
+    # Supabase is ~300ms away per round trip from this backend. pool_pre_ping
+    # adds a health-check round trip on every checkout (~1s per request
+    # measured); instead, pooled connections are replaced after
+    # pool_recycle seconds so a connection the pooler may have dropped is
+    # never reused for long.
+    pool_pre_ping=False,
+    pool_recycle=300,
     echo=settings.DEBUG,
 )
 

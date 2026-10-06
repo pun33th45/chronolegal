@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { Citation, Message } from '@/types'
+import { displayCaseName } from '@/lib/caseMeta'
 
 const SUGGESTED = [
   'Explain Article 21 of the Indian Constitution.',
@@ -36,17 +37,23 @@ const SUGGESTED = [
 ]
 
 // Real pipeline stages, driven by actual backend signals (not fabricated):
-// "question" the instant a message is sent, "retrieval"/"reranking" from
-// SSE "status" events emitted by RAGPipeline.stream() at those exact points,
-// "answer" once the "citation" event arrives (citations are only sent after
-// reranking + the evidence-threshold gate pass, strictly before any text).
+// RAGPipeline.stream() emits SSE "status" events at the moment each stage
+// starts — "understanding" (query rewrite), "retrieving" (LegalBERT + BM25
+// search), "reranking" (cross-encoder + evidence check) and "generating"
+// (only after the evidence gate passes and citations are sent).
 type PipelineStage = 'question' | 'retrieving' | 'reranking' | 'answering' | null
 const PIPELINE_STEPS: { key: Exclude<PipelineStage, null>; label: string }[] = [
   { key: 'question', label: 'Understanding question' },
-  { key: 'retrieving', label: 'Retrieving passages' },
-  { key: 'reranking', label: 'Reranking evidence' },
-  { key: 'answering', label: 'Generating answer' },
+  { key: 'retrieving', label: 'Finding relevant passages' },
+  { key: 'reranking', label: 'Ranking & verifying sources' },
+  { key: 'answering', label: 'Generating grounded answer' },
 ]
+const STATUS_TO_STAGE: Record<string, Exclude<PipelineStage, null>> = {
+  understanding: 'question',
+  retrieving: 'retrieving',
+  reranking: 'reranking',
+  generating: 'answering',
+}
 
 export default function ChatPage() {
   const { conversationId } = useParams()
@@ -193,8 +200,8 @@ export default function ChatPage() {
           }
           sawAnyChunk = true
           if (chunk.type === 'status') {
-            if (chunk.content === 'retrieving') setPipelineStage('retrieving')
-            else if (chunk.content === 'reranking') setPipelineStage('reranking')
+            const stage = chunk.content ? STATUS_TO_STAGE[chunk.content] : undefined
+            if (stage) setPipelineStage(stage)
           } else if (chunk.type === 'text') {
             setPipelineStage('answering')
             setStreamingText((prev) => prev + (chunk.content || ''))
@@ -398,7 +405,7 @@ export default function ChatPage() {
               <span className="uppercase tracking-wider font-semibold text-[10px] px-1.5 py-0.5 rounded bg-primary/15">
                 Case-scoped research
               </span>
-              <span className="text-sm">{scopedCase.name}</span>
+              <span className="text-sm">{displayCaseName(scopedCase.name)}</span>
             </span>
             <button
               onClick={() => {
@@ -425,7 +432,7 @@ export default function ChatPage() {
               </p>
               <h2 className="font-serif text-xl font-bold text-foreground mb-2 max-w-md text-balance">
                 {scopedCase
-                  ? `Research ${scopedCase.name}`
+                  ? `Research ${displayCaseName(scopedCase.name)}`
                   : 'Search across your indexed judgments'}
               </h2>
               <p className="text-muted-foreground mb-8 max-w-sm text-[15px] leading-relaxed">
@@ -537,7 +544,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-1.5 mb-1.5 px-1 text-[11px] text-muted-foreground">
               <span className="font-medium">Knowledge scope:</span>
               <span className={cn(scopedCase && 'text-primary font-medium')}>
-                {scopedCase ? `Case — ${scopedCase.name}` : 'All indexed judgments'}
+                {scopedCase ? `Case — ${displayCaseName(scopedCase.name)}` : 'All indexed judgments'}
               </span>
             </div>
             <div className="flex gap-3 items-end rounded-xl border border-border bg-card p-3 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 transition-colors">
@@ -589,32 +596,35 @@ function PipelineIndicator({ stage, collapsed }: { stage: PipelineStage; collaps
     return (
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <CheckCircle2 className="w-3 h-3 text-primary" />
-        Retrieval & reranking complete
+        Sources found and verified
       </div>
     )
   }
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">Researching</p>
-      <div className="flex items-center gap-1.5 text-xs flex-wrap">
-      {PIPELINE_STEPS.map((step, i) => {
-        const state = i < currentIdx ? 'done' : i === currentIdx ? 'active' : 'pending'
-        return (
-          <div key={step.key} className="flex items-center gap-1.5">
-            {state === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-primary" />}
-            {state === 'active' && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
-            {state === 'pending' && <div className="w-3.5 h-3.5 rounded-full border border-border" />}
-            <span className={state === 'pending' ? 'text-muted-foreground' : 'text-foreground'}>
-              {step.label}
-            </span>
-            {i < PIPELINE_STEPS.length - 1 && (
-              <ChevronRight className="w-3 h-3 text-muted-foreground mx-0.5" />
-            )}
-          </div>
-        )
-      })}
-      </div>
+    <div className="space-y-2" aria-live="polite">
+      <p className="text-xs font-medium text-foreground">Researching your question…</p>
+      <ol className="space-y-1.5">
+        {PIPELINE_STEPS.map((step, i) => {
+          const state = i < currentIdx ? 'done' : i === currentIdx ? 'active' : 'pending'
+          return (
+            <li key={step.key} className="flex items-center gap-2 text-xs">
+              {state === 'done' && <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />}
+              {state === 'active' && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />}
+              {state === 'pending' && <span className="w-3.5 h-3.5 rounded-full border border-border shrink-0" />}
+              <span
+                className={cn(
+                  state === 'pending' && 'text-muted-foreground',
+                  state === 'active' && 'text-foreground font-medium',
+                  state === 'done' && 'text-foreground/80',
+                )}
+              >
+                {step.label}
+              </span>
+            </li>
+          )
+        })}
+      </ol>
     </div>
   )
 }

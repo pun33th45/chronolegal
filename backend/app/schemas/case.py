@@ -34,6 +34,22 @@ class CaseChunkRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Stored as LegalCase.court when entity extraction finds no court in an
+# uploaded judgment. It marks "court unknown" — it is not a court name.
+UNKNOWN_COURT = "Uploaded Document"
+
+
+class CasePassageRead(BaseModel):
+    """One retrieved passage, for citation "View Source" navigation."""
+
+    chunk_index: int
+    content: str
+    section_header: str | None = None
+    page_number: int | None = None
+    start_char: int | None = None
+    end_char: int | None = None
+
+
 class LegalCaseSummary(BaseModel):
     id: uuid.UUID
     case_id: str
@@ -52,6 +68,9 @@ class LegalCaseSummary(BaseModel):
     is_embedded: bool = False
     source_file: str | None = None
     created_at: datetime
+
+    # Whether the requesting user may delete it (uploader or admin).
+    can_delete: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -94,6 +113,9 @@ class LegalCaseRead(BaseModel):
     is_embedded: bool = False
     source_file: str | None = None
     created_at: datetime
+
+    # Whether the requesting user may delete it (uploader or admin).
+    can_delete: bool = False
 
     model_config = {"from_attributes": True}
 

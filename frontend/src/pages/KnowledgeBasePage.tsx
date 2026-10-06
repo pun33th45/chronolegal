@@ -16,6 +16,7 @@ import {
   Search,
   Trash2,
   Upload,
+  GitCompareArrows,
 } from 'lucide-react'
 import { analyticsApi, casesApi, searchApi } from '@/services/api'
 import { Badge } from '@/components/ui/Badge'
@@ -28,6 +29,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { MetricCard, MetricCardSkeleton } from '@/components/ui/MetricCard'
+import { displayCaseName, courtLabel, formatCount, yearOf } from '@/lib/caseMeta'
 import type { LegalCaseSummary } from '@/types'
 
 const PAGE_SIZE = 10
@@ -104,18 +106,34 @@ export default function KnowledgeBasePage() {
   async function confirmDelete() {
     if (!deleteCase) return
     setIsDeleting(true)
+    const deletedId = deleteCase.case_id
     try {
-      await casesApi.delete(deleteCase.case_id)
-      toast.success('Judgment deleted successfully.')
+      await casesApi.delete(deletedId)
+      // Remove it from every cached Knowledge Base page right away, then
+      // refetch lists, counts and statistics in the background.
+      qc.setQueriesData<LegalCaseSummary[]>({ queryKey: ['knowledge-base'] }, (old) =>
+        old?.filter((c) => c.case_id !== deletedId),
+      )
       setDeleteCase(null)
+      toast.success('Judgment deleted successfully.')
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['knowledge-base'] }),
         qc.invalidateQueries({ queryKey: ['knowledge-base-count'] }),
         qc.invalidateQueries({ queryKey: ['analytics', 'dashboard'] }),
         qc.invalidateQueries({ queryKey: ['cases'] }),
       ])
-    } catch {
-      toast.error('Unable to delete this judgment. Please try again.')
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 403) {
+        toast.error('Only the account that uploaded this judgment can delete it.')
+      } else if (status === 404) {
+        toast.error('This judgment no longer exists.')
+        setDeleteCase(null)
+        qc.invalidateQueries({ queryKey: ['knowledge-base'] })
+      } else {
+        // Modal stays open so the user can retry; nothing was deleted.
+        toast.error('Unable to delete this judgment. Please try again.')
+      }
     } finally {
       setIsDeleting(false)
     }
@@ -225,8 +243,8 @@ export default function KnowledgeBasePage() {
         ) : (
           <EmptyState
             icon={<Library className="w-5 h-5" />}
-            title="Your knowledge base is empty."
-            description="Upload a legal judgment to start building your searchable knowledge base."
+            title="No judgments in your knowledge base yet."
+            description="Upload a judgment to start researching."
             action={
               <Link to="/upload">
                 <Button className="gap-2">
@@ -293,7 +311,7 @@ export default function KnowledgeBasePage() {
         {deleteCase && (
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm space-y-1">
-              <p className="font-medium text-foreground">{deleteCase.case_name}</p>
+              <p className="font-medium text-foreground">{displayCaseName(deleteCase.case_name)}</p>
               {deleteCase.source_file && (
                 <p className="text-xs text-muted-foreground">{deleteCase.source_file}</p>
               )}
@@ -305,8 +323,8 @@ export default function KnowledgeBasePage() {
               <Button variant="secondary" size="sm" onClick={() => setDeleteCase(null)} disabled={isDeleting}>
                 Cancel
               </Button>
-              <Button variant="destructive" size="sm" onClick={confirmDelete} loading={isDeleting}>
-                Delete Judgment
+              <Button variant="destructive" size="sm" onClick={confirmDelete} loading={isDeleting} disabled={isDeleting}>
+                {isDeleting ? 'Deleting…' : 'Delete Judgment'}
               </Button>
             </div>
           </div>
@@ -331,40 +349,46 @@ function JudgmentCard({
       animate={{ opacity: 1, y: 0 }}
       className="legal-card p-4"
     >
-      <div className="flex flex-col md:flex-row md:items-center gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-medium text-foreground truncate">{caseData.case_name}</p>
-            <Badge variant={caseData.is_embedded ? 'gold' : 'secondary'}>
+          <div className="flex items-start gap-2">
+            <Link
+              to={`/cases/${caseData.case_id}`}
+              className="font-serif text-[15px] font-semibold text-foreground leading-snug hover:text-primary transition-colors line-clamp-2 break-words"
+            >
+              {displayCaseName(caseData.case_name)}
+            </Link>
+            <Badge variant={caseData.is_embedded ? 'gold' : 'secondary'} className="shrink-0 mt-0.5">
               {caseData.is_embedded ? 'Indexed' : 'Processing'}
             </Badge>
           </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {courtLabel(caseData.court) ?? 'Court not recorded'}
+            <span className="mx-1.5 text-border">•</span>
+            {yearOf(caseData.judgment_date) ?? 'Year not recorded'}
+          </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-            {caseData.court && (
-              <span className="flex items-center gap-1">
-                <Scale className="w-3 h-3" /> {caseData.court}
-              </span>
-            )}
-            {caseData.judgment_date && (
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> {caseData.judgment_date}
-              </span>
-            )}
+            <span className="flex items-center gap-1">
+              <Layers className="w-3 h-3" /> {formatCount(caseData.chunk_count)} chunks
+            </span>
             {caseData.judges && caseData.judges.length > 0 && (
-              <span className="flex items-center gap-1">
-                <Gavel className="w-3 h-3" /> {caseData.judges.slice(0, 2).join(', ')}
-                {caseData.judges.length > 2 ? ` +${caseData.judges.length - 2}` : ''}
+              <span className="flex items-center gap-1 min-w-0">
+                <Gavel className="w-3 h-3 shrink-0" />
+                <span className="truncate">
+                  {caseData.judges.slice(0, 2).join(', ')}
+                  {caseData.judges.length > 2 ? ` +${caseData.judges.length - 2}` : ''}
+                </span>
+              </span>
+            )}
+            {caseData.source_file && (
+              <span className="flex items-center gap-1 min-w-0 max-w-full">
+                <FileText className="w-3 h-3 shrink-0" />
+                <span className="truncate">{caseData.source_file}</span>
               </span>
             )}
             <span className="flex items-center gap-1">
-              <Layers className="w-3 h-3" /> {caseData.chunk_count} chunks
+              <Calendar className="w-3 h-3" /> Added {new Date(caseData.created_at).toLocaleDateString('en-IN')}
             </span>
-            {caseData.source_file && (
-              <span className="flex items-center gap-1 truncate">
-                <FileText className="w-3 h-3" /> {caseData.source_file}
-              </span>
-            )}
-            <span>Added {new Date(caseData.created_at).toLocaleDateString()}</span>
           </div>
         </div>
 
@@ -372,24 +396,36 @@ function JudgmentCard({
           <Link to={`/cases/${caseData.case_id}`}>
             <Button variant="secondary" size="sm">View Case</Button>
           </Link>
-          <Link to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(caseData.case_name)}`}>
+          <Link to={`/chat?case=${caseData.case_id}&name=${encodeURIComponent(displayCaseName(caseData.case_name))}`}>
             <Button variant="secondary" size="sm" className="gap-1.5">
               <BotMessageSquare className="w-3.5 h-3.5" />
               Research
             </Button>
           </Link>
+          <Link to={`/compare?a=${caseData.case_id}`}>
+            <Button variant="ghost" size="sm" className="gap-1.5" disabled={!caseData.is_embedded}>
+              <GitCompareArrows className="w-3.5 h-3.5" />
+              Compare
+            </Button>
+          </Link>
           <Button variant="ghost" size="sm" onClick={onViewChunks}>
-            View Chunks
+            Chunks
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onDelete}
-            aria-label={`Delete judgment "${caseData.case_name}"`}
-            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          {/* Shown only when the backend says this user may delete it
+              (uploader or admin) — never an action that would just 403. */}
+          {caseData.can_delete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              aria-label={`Delete judgment "${displayCaseName(caseData.case_name)}"`}
+              title="Delete this judgment"
+              className="gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
     </motion.div>
@@ -422,7 +458,7 @@ function ChunkExplorerModal({
       open={!!caseData}
       onClose={onClose}
       title="Indexed Chunks"
-      description={caseData ? `${caseData.case_name} — broken into ${caseData.chunk_count} pieces and indexed for retrieval.` : undefined}
+      description={caseData ? `${displayCaseName(caseData.case_name)} — split into ${formatCount(caseData.chunk_count)} passages and indexed for retrieval.` : undefined}
       size="lg"
     >
       <div className="space-y-3 max-h-[60vh] overflow-y-auto">
@@ -439,13 +475,14 @@ function ChunkExplorerModal({
               >
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <span className="text-xs font-semibold text-primary">
-                    Chunk #{chunk.chunk_index + 1}
+                    Passage {chunk.chunk_index + 1}
                   </span>
-                  {chunk.start_char !== null && chunk.end_char !== null && (
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      chars {chunk.start_char}–{chunk.end_char}
-                    </span>
-                  )}
+                  <Link
+                    to={`/cases/${caseData!.case_id}?passage=${chunk.chunk_index}`}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    Open in judgment →
+                  </Link>
                 </div>
                 <p className="text-foreground/80 text-xs leading-relaxed line-clamp-4">
                   {chunk.content}

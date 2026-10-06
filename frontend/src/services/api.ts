@@ -4,7 +4,9 @@ import type {
   AdminStats,
   AnalyticsDashboard,
   CaseChunk,
+  CasePassage,
   ChatRequest,
+  CompareResponse,
   ChatResponse,
   Conversation,
   LegalCase,
@@ -92,6 +94,19 @@ export const authApi = {
 
   changePassword: (current_password: string, new_password: string) =>
     api.post('/auth/change-password', { current_password, new_password }),
+
+  providers: () =>
+    api.get<{ password: boolean; google: boolean }>('/auth/providers').then((r) => r.data),
+
+  // Google sign-in starts with a full-page navigation to the backend (which
+  // redirects to Google), so this is a URL rather than an XHR call.
+  googleSignInUrl: `${BASE_URL}/auth/google`,
+
+  googleExchange: (code: string) =>
+    api.post<TokenResponse>('/auth/google/exchange', { code }).then((r) => r.data),
+
+  googleLink: (link_code: string, password: string) =>
+    api.post<TokenResponse>('/auth/google/link', { link_code, password }).then((r) => r.data),
 }
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
@@ -150,10 +165,21 @@ export const casesApi = {
       .get<CaseChunk[]>(`/cases/${caseId}/chunks`, { params: { page, page_size } })
       .then((r) => r.data),
 
+  getPassage: (caseId: string, chunkIndex: number) =>
+    api.get<CasePassage>(`/cases/${caseId}/passages/${chunkIndex}`).then((r) => r.data),
+
   getSimilar: (caseId: string, top_k = 5) =>
     api.get<SimilarCaseResult[]>(`/cases/${caseId}/similar`, { params: { top_k } }).then((r) => r.data),
 
   delete: (caseId: string) => api.delete(`/cases/${caseId}`),
+}
+
+// ─── Case Comparison ──────────────────────────────────────────────────────────
+export const compareApi = {
+  compare: (case_a: string, case_b: string, question?: string) =>
+    api
+      .post<CompareResponse>('/compare/', { case_a, case_b, question: question || undefined })
+      .then((r) => r.data),
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
@@ -220,6 +246,8 @@ export type UploadStatus = {
   chunk_count?: number
   case_id?: string
   error?: string
+  /** Stage that was running when processing failed (set only on 'failed'). */
+  failed_stage?: string | null
 }
 
 export const documentsApi = {
