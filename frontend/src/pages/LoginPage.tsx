@@ -1,20 +1,36 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { BookOpen, Eye, EyeOff, FileText, Scale, Search } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { GoogleSignInSection, googleErrorMessage } from '@/components/auth/GoogleSignIn'
+import {
+  AUTH_PRIMARY_BUTTON,
+  AuthField,
+  AuthHeading,
+  AuthLayout,
+  FormAlert,
+  PasswordToggle,
+  validateFields,
+  type FieldMessages,
+} from '@/components/auth/AuthLayout'
 import { getAuthErrorMessage } from '@/lib/authErrors'
 import toast from 'react-hot-toast'
 
-const PIPELINE = [
-  { icon: FileText, label: 'Judgment' },
-  { icon: BookOpen, label: 'Knowledge Base' },
-  { icon: Search, label: 'Retrieved Evidence' },
-  { icon: Scale, label: 'Grounded Answer' },
+const STEPS = [
+  { label: 'Judgment', detail: 'The source text' },
+  { label: 'Knowledge Base', detail: 'Indexed passages' },
+  { label: 'Retrieved Evidence', detail: 'What the case says' },
+  { label: 'Grounded Answer', detail: 'Cited to the record' },
 ]
+
+const FIELD_MESSAGES: FieldMessages = {
+  email: {
+    valueMissing: 'Enter your email address.',
+    typeMismatch: 'Enter a valid email address, like name@example.com.',
+  },
+  password: { valueMissing: 'Enter your password.' },
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -22,6 +38,8 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState<{ title: string; message: string } | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   // Set when Google sign-in matched an existing email/password account: the
   // user confirms that account's password once to link Google to it.
@@ -30,7 +48,7 @@ export default function LoginPage() {
   useEffect(() => {
     const oauthError = searchParams.get('oauth_error')
     if (oauthError) {
-      toast.error(googleErrorMessage(oauthError), { id: 'oauth-error' })
+      setFormError({ title: "Couldn't sign in with Google", message: googleErrorMessage(oauthError) })
       setSearchParams({}, { replace: true })
     }
   }, [searchParams, setSearchParams])
@@ -45,9 +63,25 @@ export default function LoginPage() {
     setForm((f) => ({ ...f, email }))
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
+  function update(field: 'email' | 'password', value: string) {
+    setForm((f) => ({ ...f, [field]: value }))
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (loading) return
+    setFormError(null)
+    const errors = validateFields(e.currentTarget, FIELD_MESSAGES)
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
     setLoading(true)
     try {
       const data = googleLink
@@ -57,165 +91,102 @@ export default function LoginPage() {
       toast.success(googleLink ? 'Google account linked. Welcome back!' : 'Welcome back!')
       navigate('/dashboard')
     } catch (err: unknown) {
-      toast.error(
-        getAuthErrorMessage(
+      setFormError({
+        title: googleLink ? "Couldn't link your account" : "Couldn't sign you in",
+        message: getAuthErrorMessage(
           err,
           googleLink
             ? 'Something went wrong while linking your account. Please try again.'
             : 'Something went wrong while signing in. Please try again.',
         ),
-      )
+      })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Brand panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-legal-gradient flex-col justify-between p-12 relative overflow-hidden">
-        <div className="relative z-10">
-          {/* The logo's navy/gold wordmark is designed for a light surface —
-              "Chrono" would nearly disappear directly on this dark gradient,
-              so it gets its own small light backing rather than being
-              recolored or filtered. */}
-          <div className="inline-block bg-white rounded-lg px-3 py-2">
-            <img
-              src="/chronolegal-logo.png"
-              alt="ChronoLegal — Legal Research Platform"
-              className="h-7 w-auto object-contain"
-            />
-          </div>
+    <AuthLayout
+      eyebrow="Legal Research Platform"
+      headline={['Legal research,', 'grounded in the law.']}
+      description="Search judgments, retrieve the evidence that matters, and research with answers grounded in the cases you provide."
+      steps={STEPS}
+    >
+      <AuthHeading
+        eyebrow="Welcome back"
+        title="Continue your research."
+        description="Sign in to return to your legal research workspace."
+      />
+
+      {googleLink && (
+        <div className="mb-6 rounded-md border border-[#E0D7C6] border-l-[3px] border-l-[#C8A951] bg-[#FBF8F1] px-4 py-3 text-sm leading-relaxed text-[#4A5468]">
+          An account with <span className="font-medium text-legal-navy">{googleLink.email}</span> already
+          exists. Enter its password once to link your Google account — afterwards you can sign in
+          either way.
         </div>
+      )}
 
-        <div className="relative z-10 space-y-10">
-          <p className="text-white/85 text-xl font-serif leading-relaxed max-w-sm">
-            AI-assisted legal research grounded in your indexed case law.
-          </p>
+      {formError && <FormAlert title={formError.title} message={formError.message} />}
 
-          {/* Pipeline visual */}
-          <div className="space-y-0">
-            {PIPELINE.map((step, i) => (
-              <div key={step.label} className="flex items-center gap-3">
-                <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
-                    <step.icon className="w-3.5 h-3.5 text-white/90" />
-                  </div>
-                  {i < PIPELINE.length - 1 && <div className="w-px h-5 bg-white/15 my-0.5" />}
-                </div>
-                <p className="text-sm text-white/75 pb-5">{step.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <AuthField
+          id="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          inputMode="email"
+          value={form.email}
+          onChange={(e) => update('email', e.target.value)}
+          placeholder="you@example.com"
+          required
+          readOnly={!!googleLink}
+          error={fieldErrors.email}
+        />
 
-        <p className="relative z-10 text-white/40 text-xs uppercase tracking-wider">
-          AI-powered legal research
-        </p>
-      </div>
+        <AuthField
+          id="password"
+          label="Password"
+          type={showPass ? 'text' : 'password'}
+          autoComplete="current-password"
+          value={form.password}
+          onChange={(e) => update('password', e.target.value)}
+          placeholder="Enter your password"
+          required
+          error={fieldErrors.password}
+          trailing={<PasswordToggle visible={showPass} onToggle={() => setShowPass(!showPass)} />}
+        />
 
-      {/* Form panel */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="w-full max-w-[380px]"
+        <Button type="submit" size="lg" loading={loading} disabled={loading} className={AUTH_PRIMARY_BUTTON}>
+          {loading ? (googleLink ? 'Linking account…' : 'Signing in…') : googleLink ? 'Link Google & Sign In' : 'Sign In'}
+        </Button>
+      </form>
+
+      {googleLink ? (
+        <button
+          type="button"
+          onClick={() => {
+            setGoogleLink(null)
+            setForm({ email: '', password: '' })
+            setFieldErrors({})
+            setFormError(null)
+          }}
+          className="mt-5 w-full rounded-md py-2 text-center text-sm text-muted-foreground transition-colors hover:text-legal-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C8A951]/60"
         >
-          {/* Mobile-only brand mark — this sits on the light form panel
-              background, so the logo's own colors work directly. */}
-          <img
-            src="/chronolegal-logo.png"
-            alt="ChronoLegal — Legal Research Platform"
-            className="lg:hidden h-8 w-auto object-contain mb-8"
-          />
+          Cancel linking
+        </button>
+      ) : (
+        <GoogleSignInSection />
+      )}
 
-          <div className="mb-7">
-            <h1 className="font-serif text-2xl font-bold text-foreground mb-1.5">Welcome back</h1>
-            <p className="text-muted-foreground text-sm">Sign in to continue your legal research.</p>
-          </div>
-
-          {googleLink && (
-            <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground/90">
-              An account with <span className="font-medium">{googleLink.email}</span> already
-              exists. Enter its password once to link your Google account — afterwards you can
-              sign in either way.
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-foreground/90 mb-1.5">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="you@example.com"
-                required
-                readOnly={!!googleLink}
-                className="w-full h-11 px-3.5 bg-card border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors read-only:opacity-70"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-foreground/90 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPass ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="••••••••"
-                  required
-                  className="w-full h-11 px-3.5 pr-10 bg-card border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  aria-label={showPass ? 'Hide password' : 'Show password'}
-                  aria-pressed={showPass}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <Button type="submit" size="lg" loading={loading} disabled={loading} className="w-full mt-1">
-              {loading ? (googleLink ? 'Linking account…' : 'Signing in…') : googleLink ? 'Link Google & Sign In' : 'Sign In'}
-            </Button>
-          </form>
-
-          {googleLink ? (
-            <button
-              type="button"
-              onClick={() => {
-                setGoogleLink(null)
-                setForm({ email: '', password: '' })
-              }}
-              className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Cancel linking
-            </button>
-          ) : (
-            <GoogleSignInSection />
-          )}
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-primary font-medium hover:underline">
-              Create account
-            </Link>
-          </p>
-        </motion.div>
-      </div>
-    </div>
+      <p className="mt-10 border-t border-[#ECE6DA] pt-6 text-sm text-muted-foreground">
+        Don't have an account?{' '}
+        <Link
+          to="/register"
+          className="inline-block py-1.5 font-medium text-legal-navy underline decoration-[#C8A951] decoration-1 underline-offset-4 transition-colors hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C8A951]/60 rounded-sm"
+        >
+          Create account
+        </Link>
+      </p>
+    </AuthLayout>
   )
 }

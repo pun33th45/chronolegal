@@ -59,22 +59,23 @@ export function GoogleSignInSection() {
 
   return (
     <>
-      <div className="flex items-center gap-3 my-5" role="separator">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs uppercase tracking-wider text-muted-foreground">or</span>
-        <div className="h-px flex-1 bg-border" />
+      <div className="flex items-center gap-4 my-6" role="separator">
+        <div className="h-px flex-1 bg-[#E6DFD1]" />
+        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#8B93A3]">or</span>
+        <div className="h-px flex-1 bg-[#E6DFD1]" />
       </div>
       <a
         href={authApi.googleSignInUrl}
         onClick={() => setRedirecting(true)}
         aria-disabled={redirecting}
-        className="w-full h-11 inline-flex items-center justify-center gap-3 rounded-lg border border-[#747775] bg-white text-[#1F1F1F] text-sm font-medium hover:bg-[#F8F9FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-colors aria-disabled:pointer-events-none aria-disabled:opacity-70"
+        aria-describedby={isError ? 'google-signin-status' : undefined}
+        className="w-full h-12 inline-flex items-center justify-center gap-3 rounded-md border border-[#D9D3C7] bg-white text-[#1F1F1F] text-[15px] font-medium hover:border-[#C4BCAD] hover:bg-[#FBFAF7] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#C8A951]/40 focus-visible:border-legal-navy transition-colors aria-disabled:pointer-events-none aria-disabled:opacity-70"
       >
         {redirecting ? <Spinner size="sm" /> : <GoogleLogo />}
         {redirecting ? 'Connecting to Google…' : 'Continue with Google'}
       </a>
       {isError && (
-        <p className="mt-2.5 text-xs text-center text-muted-foreground">
+        <p id="google-signin-status" className="mt-3 text-[13px] text-center text-muted-foreground">
           Google sign-in may be temporarily unavailable.
         </p>
       )}
