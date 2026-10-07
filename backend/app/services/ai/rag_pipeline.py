@@ -3,6 +3,7 @@ Full RAG pipeline:
 Query → Rewrite → Embed → [BM25] → RRF Fuse → Rerank → Build Context → LLM → Answer + Citations
 """
 
+import asyncio
 import hashlib
 import json
 import re
@@ -26,6 +27,7 @@ from app.services.ai.prompt_templates import (
 )
 from app.services.ai.query_rewriter import rewrite_query
 from app.services.ai.reranker import Reranker
+from app.services.ai.search_service import SearchService
 
 _RAG_CACHE_TTL = 3_600  # 1 hour — identical (query, filters) reuses the answer
 
@@ -105,6 +107,46 @@ class RAGPipeline:
             k=settings.HYBRID_RRF_K,
         )
 
+    async def _retrieve_candidates(
+        self, query: str, rewritten: str, filters: dict[str, Any] | None
+    ) -> tuple[list[str], list[dict]]:
+        """Dense retrieval with BOTH the user's question and the LLM rewrite,
+        merged and de-duplicated by chunk id. The rewrite can pad a question
+        with invented statutes/case names that pull the query vector toward
+        the largest judgments; the original wording keeps the relevant case
+        in the pool. Both retrievals use the same filters, so case-scoped
+        chat still only ever sees the requested case."""
+        where = self._build_chroma_filters(filters)
+        n_results = self._retrieval_n_results(filters)
+        queries = [query] if rewritten == query else [query, rewritten]
+        raws = await asyncio.gather(
+            *(
+                self.embedder.similarity_search(query=q, n_results=n_results, where=where)
+                for q in queries
+            )
+        )
+        documents, metadatas, _ = SearchService._merge_candidates(raws)
+        return documents, metadatas
+
+    async def _rerank(
+        self, query: str, rewritten: str, documents: list[str], top_k: int
+    ) -> list[tuple[int, float]]:
+        """Score each passage against the user's question AND the rewrite and
+        keep the better score. The original wording protects against a
+        drifted rewrite; the rewrite still helps vague questions ("what
+        principle was established?") that only make sense once the case or
+        topic is filled in — reranking on the original alone refused those."""
+        if rewritten == query:
+            return await self.reranker.rerank(query, documents, top_k=top_k)
+        by_query, by_rewrite = await asyncio.gather(
+            self.reranker.rerank(query, documents),
+            self.reranker.rerank(rewritten, documents),
+        )
+        best: dict[int, float] = {}
+        for idx, score in [*by_query, *by_rewrite]:
+            best[idx] = max(score, best.get(idx, score))
+        return sorted(best.items(), key=lambda s: s[1], reverse=True)[:top_k]
+
     @staticmethod
     def _cache_key(query: str, top_k: int, filters: dict | None) -> str:
         payload = json.dumps(
@@ -141,16 +183,8 @@ class RAGPipeline:
         rewritten = await rewrite_query(query, case_name=case_name)
         logger.debug(f"Query rewritten: '{query}' → '{rewritten}'")
 
-        # Step 2: Retrieve from vector DB
-        chroma_filters = self._build_chroma_filters(filters)
-        raw_results = await self.embedder.similarity_search(
-            query=rewritten,
-            n_results=self._retrieval_n_results(filters),
-            where=chroma_filters,
-        )
-
-        documents = raw_results.get("documents", [[]])[0]
-        metadatas = raw_results.get("metadatas", [[]])[0]
+        # Step 2: Retrieve from vector DB (original question + rewrite)
+        documents, metadatas = await self._retrieve_candidates(query, rewritten, filters)
 
         if not documents:
             return RAGResult(
@@ -171,7 +205,8 @@ class RAGPipeline:
         fused_docs = [documents[i] for i in fused_order]
         fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
 
-        reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
+        # Rerank against both the user's question and the rewrite.
+        reranked = await self._rerank(query, rewritten, fused_docs, top_k)
 
         # Step 4: Build context and citations (index into fused arrays)
         context_parts = []
@@ -273,15 +308,7 @@ class RAGPipeline:
         yield StreamChunk(type="status", content="understanding")
         rewritten = await rewrite_query(query, case_name=case_name)
         yield StreamChunk(type="status", content="retrieving")
-        chroma_filters = self._build_chroma_filters(filters)
-        raw_results = await self.embedder.similarity_search(
-            query=rewritten,
-            n_results=self._retrieval_n_results(filters),
-            where=chroma_filters,
-        )
-
-        documents = raw_results.get("documents", [[]])[0]
-        metadatas = raw_results.get("metadatas", [[]])[0]
+        documents, metadatas = await self._retrieve_candidates(query, rewritten, filters)
 
         if not documents:
             yield StreamChunk(type="text", content=_INSUFFICIENT)
@@ -294,7 +321,7 @@ class RAGPipeline:
         fused_docs = [documents[i] for i in fused_order]
         fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
 
-        reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
+        reranked = await self._rerank(query, rewritten, fused_docs, top_k)
 
         # Gate: check reranker score before generating or yielding citations
         max_score = max(score for _, score in reranked) if reranked else 0
@@ -345,23 +372,19 @@ class RAGPipeline:
         self, question: str, case_id: str, case_name: str, top_k: int
     ) -> list[tuple[str, dict[str, Any], float]]:
         """The normal retrieval path scoped to one judgment: query rewrite ->
-        LegalBERT dense retrieval (case-filtered) -> BM25 + RRF fusion ->
-        cross-encoder rerank. Returns (passage, metadata, rerank score)."""
+        LegalBERT dense retrieval (case-filtered, question + rewrite) -> BM25
+        + RRF fusion -> cross-encoder rerank (better of question/rewrite).
+        Returns (passage, metadata, rerank score)."""
         rewritten = await rewrite_query(question, case_name=case_name)
-        filters = {"case_id": case_id}
-        raw = await self.embedder.similarity_search(
-            query=rewritten,
-            n_results=self._retrieval_n_results(filters),
-            where=self._build_chroma_filters(filters),
+        documents, metadatas = await self._retrieve_candidates(
+            question, rewritten, {"case_id": case_id}
         )
-        documents = raw.get("documents", [[]])[0]
-        metadatas = raw.get("metadatas", [[]])[0]
         if not documents:
             return []
         fused_order = self._fuse_results(rewritten, documents, list(range(len(documents))))
         fused_docs = [documents[i] for i in fused_order]
         fused_meta = [metadatas[i] if i < len(metadatas) else {} for i in fused_order]
-        reranked = await self.reranker.rerank(rewritten, fused_docs, top_k=top_k)
+        reranked = await self._rerank(question, rewritten, fused_docs, top_k)
         return [(fused_docs[i], fused_meta[i], score) for i, score in reranked]
 
     async def compare(
