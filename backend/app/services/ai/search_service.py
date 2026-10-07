@@ -2,6 +2,7 @@
 Hybrid search: semantic (ChromaDB) + keyword (BM25) with fusion.
 """
 
+import asyncio
 import time
 
 from app.core.redis import cache
@@ -39,16 +40,21 @@ class SearchService:
 
         rewritten = await rewrite_query(query)
         chroma_where = self._filters_to_chroma(filters)
+        n_results = min(top_k * 3, 50)
 
-        raw = await self.embedder.similarity_search(
-            query=rewritten,
-            n_results=min(top_k * 3, 50),
-            where=chroma_where,
+        # Retrieve with BOTH the user's own query and the LLM rewrite. The
+        # rewrite can pad a short query with invented boilerplate (statutes,
+        # case names) that drags the mean-pooled query vector toward the
+        # largest judgments, pushing the genuinely matching case out of the
+        # candidate pool entirely; the original wording keeps it in.
+        queries = [query] if rewritten == query else [query, rewritten]
+        raws = await asyncio.gather(
+            *(
+                self.embedder.similarity_search(query=q, n_results=n_results, where=chroma_where)
+                for q in queries
+            )
         )
-
-        documents = raw.get("documents", [[]])[0]
-        metadatas = raw.get("metadatas", [[]])[0]
-        distances = raw.get("distances", [[]])[0]
+        documents, metadatas, distances = self._merge_candidates(raws)
 
         if not documents:
             return SearchResponse(
@@ -61,7 +67,8 @@ class SearchService:
                 filters_applied=filters,
             )
 
-        reranked = await self.reranker.rerank(rewritten, documents, top_k=top_k)
+        # Rerank against what the user actually asked, not the rewrite.
+        reranked = await self.reranker.rerank(query, documents, top_k=top_k)
 
         results = []
         for rank, (orig_idx, rerank_score) in enumerate(reranked):
@@ -144,6 +151,24 @@ class SearchService:
                 break
 
         return results
+
+    @staticmethod
+    def _merge_candidates(raws: list[dict]) -> tuple[list[str], list[dict], list[float]]:
+        """Union of Chroma query results, de-duplicated by chunk id (keeping
+        the closest distance), ordered by distance."""
+        best: dict[str, tuple[str, dict, float]] = {}
+        for raw in raws:
+            ids = raw.get("ids", [[]])[0]
+            docs = raw.get("documents", [[]])[0]
+            metas = raw.get("metadatas", [[]])[0]
+            dists = raw.get("distances", [[]])[0]
+            for i, doc in enumerate(docs):
+                key = ids[i] if i < len(ids) else doc
+                dist = dists[i] if i < len(dists) else 1.0
+                if key not in best or dist < best[key][2]:
+                    best[key] = (doc, metas[i] if i < len(metas) else {}, dist)
+        merged = sorted(best.values(), key=lambda t: t[2])
+        return [m[0] for m in merged], [m[1] for m in merged], [m[2] for m in merged]
 
     def _filters_to_chroma(self, filters: SearchFilters | None) -> dict | None:
         if not filters:
