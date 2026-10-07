@@ -36,19 +36,26 @@ function GoogleLogo() {
 /**
  * "──── or ────" divider plus a "Continue with Google" button, styled to
  * Google's light-theme branding (white fill, #747775 outline, multicolor G)
- * at the same height as the form's primary button. Renders nothing unless
- * the backend reports Google sign-in as configured.
+ * at the same height as the form's primary button.
+ *
+ * Google sign-in is a known, permanent part of this product, so the button
+ * is shown by default (while the `/auth/providers` check is loading, and
+ * even if that check fails outright — e.g. the backend is temporarily
+ * unreachable). It's hidden only on the one signal that actually means
+ * "this deployment doesn't offer Google sign-in": a *successful* response
+ * that explicitly says `google: false`. That keeps a flaky or cold-started
+ * backend from silently erasing a core sign-in option.
  */
 export function GoogleSignInSection() {
   const [redirecting, setRedirecting] = useState(false)
-  const { data } = useQuery({
+  const { data, isSuccess, isError } = useQuery({
     queryKey: ['auth-providers'],
     queryFn: authApi.providers,
     staleTime: Infinity,
     retry: false,
   })
 
-  if (!data?.google) return null
+  if (isSuccess && !data?.google) return null
 
   return (
     <>
@@ -64,8 +71,13 @@ export function GoogleSignInSection() {
         className="w-full h-11 inline-flex items-center justify-center gap-3 rounded-lg border border-[#747775] bg-white text-[#1F1F1F] text-sm font-medium hover:bg-[#F8F9FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 transition-colors aria-disabled:pointer-events-none aria-disabled:opacity-70"
       >
         {redirecting ? <Spinner size="sm" /> : <GoogleLogo />}
-        Continue with Google
+        {redirecting ? 'Connecting to Google…' : 'Continue with Google'}
       </a>
+      {isError && (
+        <p className="mt-2.5 text-xs text-center text-muted-foreground">
+          Google sign-in may be temporarily unavailable.
+        </p>
+      )}
     </>
   )
 }

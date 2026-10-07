@@ -6,21 +6,8 @@ import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { GoogleSignInSection, googleErrorMessage } from '@/components/auth/GoogleSignIn'
+import { getAuthErrorMessage } from '@/lib/authErrors'
 import toast from 'react-hot-toast'
-
-// FastAPI returns `detail` as a plain string for most errors (e.g. "Incorrect
-// email or password"), but as an array of Pydantic error objects for request
-// validation failures (422) — rendering that array directly as a toast
-// message fails silently/unreadably, so normalize both shapes to one string.
-function extractErrorMessage(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  if (typeof detail === 'string') return detail
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: unknown }
-    if (typeof first?.msg === 'string') return first.msg
-  }
-  return fallback
-}
 
 const PIPELINE = [
   { icon: FileText, label: 'Judgment' },
@@ -60,6 +47,7 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     try {
       const data = googleLink
@@ -69,7 +57,14 @@ export default function LoginPage() {
       toast.success(googleLink ? 'Google account linked. Welcome back!' : 'Welcome back!')
       navigate('/dashboard')
     } catch (err: unknown) {
-      toast.error(extractErrorMessage(err, 'Login failed'))
+      toast.error(
+        getAuthErrorMessage(
+          err,
+          googleLink
+            ? 'Something went wrong while linking your account. Please try again.'
+            : 'Something went wrong while signing in. Please try again.',
+        ),
+      )
     } finally {
       setLoading(false)
     }
@@ -150,11 +145,13 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground/90 mb-1.5">
+              <label htmlFor="email" className="block text-sm font-medium text-foreground/90 mb-1.5">
                 Email
               </label>
               <input
+                id="email"
                 type="email"
+                autoComplete="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="you@example.com"
@@ -165,12 +162,14 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground/90 mb-1.5">
+              <label htmlFor="password" className="block text-sm font-medium text-foreground/90 mb-1.5">
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="password"
                   type={showPass ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   placeholder="••••••••"
@@ -181,6 +180,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPass(!showPass)}
                   aria-label={showPass ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPass}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -188,8 +188,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" size="lg" loading={loading} className="w-full mt-1">
-              {loading ? 'Signing in...' : googleLink ? 'Link Google & Sign In' : 'Sign In'}
+            <Button type="submit" size="lg" loading={loading} disabled={loading} className="w-full mt-1">
+              {loading ? (googleLink ? 'Linking account…' : 'Signing in…') : googleLink ? 'Link Google & Sign In' : 'Sign In'}
             </Button>
           </form>
 

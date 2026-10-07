@@ -6,22 +6,8 @@ import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { GoogleSignInSection } from '@/components/auth/GoogleSignIn'
+import { getAuthErrorMessage } from '@/lib/authErrors'
 import toast from 'react-hot-toast'
-
-// FastAPI returns `detail` as a plain string for most errors (e.g. "Email
-// already registered"), but as an array of Pydantic error objects for
-// request validation failures (422, e.g. a weak password) — rendering that
-// array directly as a toast message fails silently/unreadably, so normalize
-// both shapes to one string.
-function extractErrorMessage(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  if (typeof detail === 'string') return detail
-  if (Array.isArray(detail) && detail.length > 0) {
-    const first = detail[0] as { msg?: unknown }
-    if (typeof first?.msg === 'string') return first.msg
-  }
-  return fallback
-}
 
 const PIPELINE = [
   { icon: FileText, label: 'Judgment' },
@@ -44,6 +30,7 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     try {
       await authApi.register(form)
@@ -52,7 +39,9 @@ export default function RegisterPage() {
       toast.success('Account created! Welcome to ChronoLegal.')
       navigate('/dashboard')
     } catch (err: unknown) {
-      toast.error(extractErrorMessage(err, 'Registration failed'))
+      toast.error(
+        getAuthErrorMessage(err, 'Something went wrong while creating your account. Please try again.'),
+      )
     } finally {
       setLoading(false)
     }
@@ -127,9 +116,13 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3.5">
               <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1.5">Full Name</label>
+                <label htmlFor="full_name" className="block text-sm font-medium text-foreground/90 mb-1.5">
+                  Full Name
+                </label>
                 <input
+                  id="full_name"
                   type="text"
+                  autoComplete="name"
                   value={form.full_name}
                   onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                   placeholder="John Doe"
@@ -137,24 +130,36 @@ export default function RegisterPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1.5">Username</label>
+                <label htmlFor="username" className="block text-sm font-medium text-foreground/90 mb-1.5">
+                  Username
+                </label>
                 <input
+                  id="username"
                   type="text"
+                  autoComplete="username"
                   value={form.username}
                   onChange={(e) => setForm({ ...form, username: e.target.value })}
                   placeholder="johndoe"
                   required
                   minLength={3}
                   pattern="[a-zA-Z0-9_\-]+"
+                  aria-describedby="username-help"
                   className="w-full h-11 px-3.5 bg-card border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
                 />
               </div>
             </div>
+            <p id="username-help" className="-mt-2.5 text-xs text-muted-foreground">
+              Letters, numbers, underscores and hyphens only.
+            </p>
 
             <div>
-              <label className="block text-sm font-medium text-foreground/90 mb-1.5">Email</label>
+              <label htmlFor="email" className="block text-sm font-medium text-foreground/90 mb-1.5">
+                Email
+              </label>
               <input
+                id="email"
                 type="email"
+                autoComplete="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="you@example.com"
@@ -164,30 +169,39 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground/90 mb-1.5">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-foreground/90 mb-1.5">
+                Password
+              </label>
               <div className="relative">
                 <input
+                  id="password"
                   type={showPass ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Min. 8 characters, 1 uppercase, 1 number"
+                  placeholder="••••••••"
                   required
                   minLength={8}
+                  aria-describedby="password-help"
                   className="w-full h-11 px-3.5 pr-10 bg-card border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
                   aria-label={showPass ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPass}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <p id="password-help" className="mt-1.5 text-xs text-muted-foreground">
+                At least 8 characters, with one uppercase letter and one number.
+              </p>
             </div>
 
-            <Button type="submit" size="lg" loading={loading} className="w-full mt-1">
-              {loading ? 'Creating account...' : 'Create Account'}
+            <Button type="submit" size="lg" loading={loading} disabled={loading} className="w-full mt-1">
+              {loading ? 'Creating account…' : 'Create Account'}
             </Button>
           </form>
 
