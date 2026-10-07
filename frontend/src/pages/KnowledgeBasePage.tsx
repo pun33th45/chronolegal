@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -102,9 +102,12 @@ export default function KnowledgeBasePage() {
   const [chunksCase, setChunksCase] = useState<LegalCaseSummary | null>(null)
   const [deleteCase, setDeleteCase] = useState<LegalCaseSummary | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const deletingRef = useRef(false)
 
   async function confirmDelete() {
-    if (!deleteCase) return
+    // Ref, not state: blocks a second click that lands before re-render.
+    if (!deleteCase || deletingRef.current) return
+    deletingRef.current = true
     setIsDeleting(true)
     const deletedId = deleteCase.case_id
     try {
@@ -114,6 +117,9 @@ export default function KnowledgeBasePage() {
       qc.setQueriesData<LegalCaseSummary[]>({ queryKey: ['knowledge-base'] }, (old) =>
         old?.filter((c) => c.case_id !== deletedId),
       )
+      // Deleting the last judgment on a later page would otherwise leave an
+      // empty page that reads as "no judgments at all".
+      if (page > 1 && cases?.length === 1) setPage((p) => p - 1)
       setDeleteCase(null)
       toast.success('Judgment deleted successfully.')
       await Promise.all([
@@ -135,6 +141,7 @@ export default function KnowledgeBasePage() {
         toast.error('Unable to delete this judgment. Please try again.')
       }
     } finally {
+      deletingRef.current = false
       setIsDeleting(false)
     }
   }
@@ -304,8 +311,8 @@ export default function KnowledgeBasePage() {
       <Modal
         open={!!deleteCase}
         onClose={() => { if (!isDeleting) setDeleteCase(null) }}
-        title="Delete this judgment?"
-        description="This will permanently remove the judgment and its indexed knowledge from ChronoLegal. This action cannot be undone."
+        title="Delete judgment?"
+        description="This will remove the judgment and its indexed passages from your knowledge base. This action cannot be undone."
         size="sm"
       >
         {deleteCase && (
